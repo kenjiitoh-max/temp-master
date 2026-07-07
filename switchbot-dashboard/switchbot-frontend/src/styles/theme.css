@@ -1,0 +1,155 @@
+/*
+ * Theme design tokens.
+ * Each theme is selected via the `data-theme` attribute on <html>.
+ * Chart.js colors are read from the --chart-* variables via getComputedStyle,
+ * so keep them defined on every theme.
+ */
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f5f5f5;
+  --bg-elevated: #ffffff;
+  --panel-bg: #ffffff;
+  --panel-header-bg: #f8f8f8;
+  --border: #e2e2e2;
+  --text: #212529;
+  --text-muted: #777777;
+  --accent: #2f6fed;
+  --accent-contrast: #ffffff;
+
+  --navbar-bg: #ffffff;
+  --tag-bg: #eeeeee;
+  --tag-text: #777777;
+
+  --badge-temp-bg: #d9534f;
+  --badge-humidity-bg: #5bc0de;
+  --badge-battery-bg: #5cb85c;
+  --badge-text: #ffffff;
+
+  --info-bg: #d9edf7;
+  --info-text: #31708f;
+  --warning-bg: #fcf8e3;
+  --warning-text: #8a6d3b;
+  --danger-bg: #f2dede;
+  --danger-text: #a94442;
+  --success-bg: #5cb85c;
+  --success-text: #ffffff;
+
+  --chart-line: #d9534f;
+  --chart-fill: rgba(217, 83, 79, 0.15);
+  --chart-point: #d9534f;
+  --chart-grid: rgba(0, 0, 0, 0.06);
+  --chart-tick: #777777;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #14161a;
+  --bg-elevated: #1d2026;
+  --panel-bg: #1d2026;
+  --panel-header-bg: #242830;
+  --border: #313640;
+  --text: #e6e8ec;
+  --text-muted: #9aa1ad;
+  --accent: #5b8cff;
+  --accent-contrast: #0b0d10;
+
+  --navbar-bg: #1d2026;
+  --tag-bg: #2c313b;
+  --tag-text: #9aa1ad;
+
+  --badge-temp-bg: #e0625d;
+  --badge-humidity-bg: #4fb0d6;
+  --badge-battery-bg: #57b85c;
+  --badge-text: #0b0d10;
+
+  --info-bg: #14324a;
+  --info-text: #7fc4e6;
+  --warning-bg: #3d3418;
+  --warning-text: #e6cf7f;
+  --danger-bg: #3d1f1f;
+  --danger-text: #f0a3a3;
+  --success-bg: #2f7d33;
+  --success-text: #eafbea;
+
+  --chart-line: #ff8a85;
+  --chart-fill: rgba(255, 138, 133, 0.18);
+  --chart-point: #ff8a85;
+  --chart-grid: rgba(255, 255, 255, 0.08);
+  --chart-tick: #9aa1ad;
+}
+
+[data-theme='midnight'] {
+  color-scheme: dark;
+  --bg: #0f1226;
+  --bg-elevated: #191d3d;
+  --panel-bg: #191d3d;
+  --panel-header-bg: #21264d;
+  --border: #2c3268;
+  --text: #e8e9ff;
+  --text-muted: #9fa3d4;
+  --accent: #b083ff;
+  --accent-contrast: #0f1226;
+
+  --navbar-bg: #191d3d;
+  --tag-bg: #262c5c;
+  --tag-text: #9fa3d4;
+
+  --badge-temp-bg: #ff7ac6;
+  --badge-humidity-bg: #56c6ff;
+  --badge-battery-bg: #7cf0b0;
+  --badge-text: #0f1226;
+
+  --info-bg: #1c2350;
+  --info-text: #9fb4ff;
+  --warning-bg: #3a2f5a;
+  --warning-text: #e8c7ff;
+  --danger-bg: #3a1f3a;
+  --danger-text: #ff9fd6;
+  --success-bg: #2b7d63;
+  --success-text: #d9fff0;
+
+  --chart-line: #b083ff;
+  --chart-fill: rgba(176, 131, 255, 0.20);
+  --chart-point: #ff7ac6;
+  --chart-grid: rgba(176, 131, 255, 0.12);
+  --chart-tick: #9fa3d4;
+}
+
+[data-theme='solarized'] {
+  color-scheme: light;
+  --bg: #fdf6e3;
+  --bg-elevated: #eee8d5;
+  --panel-bg: #fdf6e3;
+  --panel-header-bg: #eee8d5;
+  --border: #d8cfb0;
+  --text: #073642;
+  --text-muted: #657b83;
+  --accent: #268bd2;
+  --accent-contrast: #fdf6e3;
+
+  --navbar-bg: #eee8d5;
+  --tag-bg: #e4dcc0;
+  --tag-text: #657b83;
+
+  --badge-temp-bg: #dc322f;
+  --badge-humidity-bg: #268bd2;
+  --badge-battery-bg: #859900;
+  --badge-text: #fdf6e3;
+
+  --info-bg: #e4dcc0;
+  --info-text: #586e75;
+  --warning-bg: #f7edd0;
+  --warning-text: #b58900;
+  --danger-bg: #f4ded9;
+  --danger-text: #dc322f;
+  --success-bg: #859900;
+  --success-text: #fdf6e3;
+
+  --chart-line: #cb4b16;
+  --chart-fill: rgba(203, 75, 22, 0.15);
+  --chart-point: #cb4b16;
+  --chart-grid: rgba(7, 54, 66, 0.10);
+  --chart-tick: #657b83;
+}
