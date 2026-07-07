@@ -15,7 +15,7 @@ import httpx
 from dotenv import load_dotenv
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -28,6 +28,16 @@ DB_PATH = os.getenv("DB_PATH", "/data/app.db" if os.path.exists("/data") else "a
 SWITCHBOT_API_BASE = "https://api.switch-bot.com/v1.1"
 SWITCHBOT_TOKEN = os.getenv("SWITCHBOT_TOKEN", "")
 SWITCHBOT_SECRET = os.getenv("SWITCHBOT_SECRET", "")
+
+# Shared secret used to protect state-changing / data-exfiltration endpoints
+# (/api/backup, /api/import, /api/meters/refresh). When empty, those endpoints
+# fail closed (503) so the server is never left unprotected by accident.
+API_TOKEN = os.getenv("API_TOKEN", "")
+
+# Comma-separated list of origins allowed by CORS. Defaults to the production
+# frontend origin. The dashboard is normally served same-origin from this
+# backend, so a wildcard is unnecessary and unsafe.
+DEFAULT_ALLOWED_ORIGINS = "https://temp-master.fly.dev"
 
 DATA_COLLECTION_INTERVAL = 120
 RATE_LIMIT_BACKOFF_BASE = 60
@@ -360,6 +370,45 @@ async def cleanup_old_latency_logs():
         await db.commit()
 
 
+def get_allowed_origins() -> list[str]:
+    """Parse the ALLOWED_ORIGINS env var into a list of allowed CORS origins."""
+    raw = os.getenv("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS)
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+def _extract_request_token(request: Request) -> Optional[str]:
+    """Extract an API token from the Authorization header, X-API-Token header,
+    or a `token` query parameter (the last supports browser file downloads)."""
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[len("Bearer "):].strip()
+        if token:
+            return token
+    x_api_token = request.headers.get("X-API-Token", "").strip()
+    if x_api_token:
+        return x_api_token
+    query_token = request.query_params.get("token", "").strip()
+    if query_token:
+        return query_token
+    return None
+
+
+async def require_api_token(request: Request) -> None:
+    """Require a valid API token for protected endpoints.
+
+    Fails closed: if no API_TOKEN is configured on the server the endpoint is
+    unavailable (503) rather than open to everyone.
+    """
+    if not API_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="API authentication is not configured on the server",
+        )
+    provided = _extract_request_token(request)
+    if not provided or not hmac.compare_digest(provided, API_TOKEN):
+        raise HTTPException(status_code=401, detail="Invalid or missing API token")
+
+
 def generate_switchbot_headers() -> dict:
     if not SWITCHBOT_TOKEN or not SWITCHBOT_SECRET:
         return {}
@@ -588,8 +637,8 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=get_allowed_origins(),
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -641,7 +690,7 @@ async def get_meter_history(device_id: str, time_scale: TimeScale = TimeScale.HO
     }
 
 
-@app.post("/api/meters/refresh")
+@app.post("/api/meters/refresh", dependencies=[Depends(require_api_token)])
 async def refresh_meters():
     if not SWITCHBOT_TOKEN or not SWITCHBOT_SECRET:
         raise HTTPException(status_code=500, detail="SwitchBot credentials not configured")
@@ -729,7 +778,7 @@ class ImportData(BaseModel):
     devices: list[ImportDeviceData]
 
 
-@app.post("/api/import")
+@app.post("/api/import", dependencies=[Depends(require_api_token)])
 async def import_data(data: ImportData):
     """Import historical data from another backend instance."""
     imported_devices = 0
@@ -773,7 +822,7 @@ async def import_data(data: ImportData):
     }
 
 
-@app.get("/api/backup")
+@app.get("/api/backup", dependencies=[Depends(require_api_token)])
 async def backup_database():
     """Download the SQLite database file for backup purposes."""
     if not os.path.exists(DB_PATH):
