@@ -469,3 +469,70 @@ class TestImportDataEndpoint:
         data = response.json()
         assert data["imported_devices"] == 0
         assert data["imported_readings"] == 0
+
+
+class TestBackupEndpoint:
+    TOKEN = "s3cret-backup-token"
+
+    def test_backup_disabled_when_token_unset(self, client):
+        with patch("app.main.BACKUP_API_TOKEN", ""):
+            response = client.get("/api/backup")
+
+        assert response.status_code == 503
+
+    def test_backup_disabled_ignores_provided_header(self, client):
+        with patch("app.main.BACKUP_API_TOKEN", ""):
+            response = client.get(
+                "/api/backup",
+                headers={"Authorization": "Bearer anything"},
+            )
+
+        assert response.status_code == 503
+
+    def test_backup_missing_authorization_header(self, client):
+        with patch("app.main.BACKUP_API_TOKEN", self.TOKEN):
+            response = client.get("/api/backup")
+
+        assert response.status_code == 401
+
+    def test_backup_malformed_authorization_header(self, client):
+        with patch("app.main.BACKUP_API_TOKEN", self.TOKEN):
+            response = client.get(
+                "/api/backup",
+                headers={"Authorization": self.TOKEN},
+            )
+
+        assert response.status_code == 401
+
+    def test_backup_wrong_token(self, client):
+        with patch("app.main.BACKUP_API_TOKEN", self.TOKEN):
+            response = client.get(
+                "/api/backup",
+                headers={"Authorization": "Bearer wrong-token"},
+            )
+
+        assert response.status_code == 401
+
+    def test_backup_valid_token_downloads_db(self, client):
+        with patch("app.main.BACKUP_API_TOKEN", self.TOKEN):
+            response = client.get(
+                "/api/backup",
+                headers={"Authorization": f"Bearer {self.TOKEN}"},
+            )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/x-sqlite3"
+        assert "switchbot_backup_" in response.headers.get("content-disposition", "")
+
+    def test_backup_valid_token_but_missing_db_file(self, client):
+        original_db_path = main_module.DB_PATH
+        main_module.DB_PATH = "/nonexistent/path/app.db"
+        try:
+            with patch("app.main.BACKUP_API_TOKEN", self.TOKEN):
+                response = client.get(
+                    "/api/backup",
+                    headers={"Authorization": f"Bearer {self.TOKEN}"},
+                )
+            assert response.status_code == 404
+        finally:
+            main_module.DB_PATH = original_db_path

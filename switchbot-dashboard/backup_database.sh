@@ -12,9 +12,15 @@
 # Configuration:
 #   Set SWITCHBOT_BACKEND_URL environment variable or edit the default below
 #   Set BACKUP_DIR environment variable to change the backup directory
+#   Set SWITCHBOT_BACKUP_TOKEN (or BACKUP_API_TOKEN) to authenticate:
+#     the /api/backup endpoint now requires a shared secret and this script
+#     sends it as "Authorization: Bearer <token>". If neither variable is set,
+#     the request is sent without the header and the server will reject it
+#     (401 Unauthorized, or 503 if the server has no token configured).
 
 BACKEND_URL="${SWITCHBOT_BACKEND_URL:-https://temp-master.fly.dev}"
 BACKUP_DIR="${BACKUP_DIR:-$HOME/switchbot_backups}"
+BACKUP_TOKEN="${SWITCHBOT_BACKUP_TOKEN:-${BACKUP_API_TOKEN:-}}"
 DEFAULT_INTERVAL=3600  # 1 hour in seconds
 
 LOOP_MODE=false
@@ -43,6 +49,10 @@ while [[ $# -gt 0 ]]; do
             echo "Environment variables:"
             echo "  SWITCHBOT_BACKEND_URL  Backend URL (default: https://temp-master.fly.dev)"
             echo "  BACKUP_DIR             Backup directory (default: ~/switchbot_backups)"
+            echo "  SWITCHBOT_BACKUP_TOKEN Shared secret for the backup endpoint,"
+            echo "                         sent as 'Authorization: Bearer <token>'."
+            echo "                         (BACKUP_API_TOKEN is also accepted.)"
+            echo "                         Required: the server rejects requests without it."
             exit 0
             ;;
         *)
@@ -60,8 +70,17 @@ backup_database() {
     local backup_file="$BACKUP_DIR/switchbot_backup_${timestamp}.db"
     
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting backup..."
-    
-    local http_code=$(curl -s -w "%{http_code}" -o "$backup_file" "$BACKEND_URL/api/backup")
+
+    if [ -z "$BACKUP_TOKEN" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Warning: no backup token set (SWITCHBOT_BACKUP_TOKEN/BACKUP_API_TOKEN); the server will likely reject this request."
+    fi
+
+    local curl_auth_args=()
+    if [ -n "$BACKUP_TOKEN" ]; then
+        curl_auth_args=(-H "Authorization: Bearer $BACKUP_TOKEN")
+    fi
+
+    local http_code=$(curl -s -w "%{http_code}" -o "$backup_file" "${curl_auth_args[@]}" "$BACKEND_URL/api/backup")
     
     if [ "$http_code" -eq 200 ]; then
         local file_size=$(ls -lh "$backup_file" | awk '{print $5}')
