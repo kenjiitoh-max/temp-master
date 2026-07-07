@@ -15,7 +15,7 @@ import httpx
 from dotenv import load_dotenv
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -28,6 +28,10 @@ DB_PATH = os.getenv("DB_PATH", "/data/app.db" if os.path.exists("/data") else "a
 SWITCHBOT_API_BASE = "https://api.switch-bot.com/v1.1"
 SWITCHBOT_TOKEN = os.getenv("SWITCHBOT_TOKEN", "")
 SWITCHBOT_SECRET = os.getenv("SWITCHBOT_SECRET", "")
+
+# Shared secret required to access the backup endpoint. When empty the backup
+# endpoint is disabled entirely so that "unset" never means "open to everyone".
+BACKUP_API_TOKEN = os.getenv("BACKUP_API_TOKEN", "")
 
 DATA_COLLECTION_INTERVAL = 120
 RATE_LIMIT_BACKOFF_BASE = 60
@@ -773,9 +777,44 @@ async def import_data(data: ImportData):
     }
 
 
-@app.get("/api/backup")
+def require_backup_token(authorization: Optional[str] = Header(default=None)) -> None:
+    """Authenticate requests to backup-related endpoints via a shared secret.
+
+    The token is read from the ``BACKUP_API_TOKEN`` environment variable. When it
+    is unset the protected endpoint is disabled (``503``) instead of being left
+    open, so that a missing configuration never becomes an "open to everyone"
+    default. The token comparison uses :func:`hmac.compare_digest` to guard
+    against timing attacks.
+    """
+    if not BACKUP_API_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="Backup endpoint is disabled: BACKUP_API_TOKEN is not configured.",
+        )
+
+    scheme, _, credentials = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not credentials:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or malformed Authorization header.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not hmac.compare_digest(credentials, BACKUP_API_TOKEN):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid backup token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+@app.get("/api/backup", dependencies=[Depends(require_backup_token)])
 async def backup_database():
-    """Download the SQLite database file for backup purposes."""
+    """Download the SQLite database file for backup purposes.
+
+    Requires a valid ``Authorization: Bearer <token>`` header matching
+    ``BACKUP_API_TOKEN`` (see :func:`require_backup_token`).
+    """
     if not os.path.exists(DB_PATH):
         raise HTTPException(status_code=404, detail="Database file not found")
     
