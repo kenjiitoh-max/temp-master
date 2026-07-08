@@ -52,6 +52,31 @@ poetry run fastapi run app/main.py --host 0.0.0.0 --port 8000
 
 The frontend is served at `http://localhost:8000/` and the API docs at `http://localhost:8000/docs`.
 
+### Testing without SwitchBot credentials
+
+If `SWITCHBOT_TOKEN`/`SWITCHBOT_SECRET` are not available, you can still exercise the full UI by
+seeding sample data through the import endpoint (the background collector stays idle and
+`/api/status` reports `configured: false`, but that field is not used by the frontend — the
+connection badge is driven by whether the fetch succeeds):
+
+```bash
+# Start the backend with empty creds, then POST devices + readings to /api/import
+curl -s -X POST http://localhost:8000/api/import \
+  -H 'Content-Type: application/json' \
+  -d '{"devices":[{"device_id":"D1","device_name":"Bedroom Meter","device_type":"Meter",
+       "current_temperature":22.0,"current_humidity":45,"battery":90,
+       "last_updated":"<ISO8601>","readings":[{"timestamp":"<ISO8601>","temperature":22.0,
+       "humidity":45,"battery":90}]}]}'
+```
+
+Seed ~24 hourly readings per device (e.g. a sine curve) so the "Last 24 Hours" chart shows a
+visible curve and switching to "Last Hour" visibly collapses it to the most recent point(s).
+Pick `device_name` values that exist in `DISPLAY_NAMES` (see `src/constants/displayNames.ts`) to
+verify the name mapping (e.g. "Bedroom Meter" → "第1蒸留塔 (T-101)").
+
+Note: "Refresh Data" calls `POST /api/meters/refresh`, which needs real creds and returns 500
+without them; the frontend catches the error and reloads cached data, so the UI does not break.
+
 ## Key Test Points
 
 ### Branding Verification
