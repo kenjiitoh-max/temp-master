@@ -168,6 +168,11 @@
       return token;
     }
 
+    // Drop a stored token so the user is re-prompted (e.g. after a 401).
+    function clearApiToken() {
+      window.localStorage.removeItem('API_TOKEN');
+    }
+
     var REFRESH_INTERVAL = 30000;
     var currentTimeScale = 'day';
     var metersData = [];
@@ -291,14 +296,23 @@
 
     function triggerRefresh(callback) {
       var token = getApiToken();
+      if (!token) {
+        if (callback) callback('API token is required', null);
+        return;
+      }
       $.ajax({
         url: API_URL + '/api/meters/refresh',
         type: 'POST',
-        headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+        headers: { 'Authorization': 'Bearer ' + token },
         success: function(data) {
           if (callback) callback(null, data);
         },
         error: function(xhr, status, err) {
+          // A rejected token is likely stale/incorrect; clear it so the user
+          // is prompted again next time instead of being stuck on 401.
+          if (xhr && xhr.status === 401) {
+            clearApiToken();
+          }
           if (callback) callback(err || status, null);
         }
       });
@@ -565,9 +579,37 @@
       $('#btn-backup').click(function() {
         var token = getApiToken();
         if (!token) return;
-        // window.open cannot set headers, so the token is passed as a query
-        // parameter here. This can leak into server/proxy logs; see PR notes.
-        window.open(API_URL + '/api/backup?token=' + encodeURIComponent(token), '_blank');
+        // Fetch with the token in the Authorization header (never in the URL,
+        // which could leak into logs/history), then trigger a client-side
+        // download from the response blob.
+        fetch(API_URL + '/api/backup', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        }).then(function(resp) {
+          if (resp.status === 401) {
+            clearApiToken();
+            window.alert('API token was rejected. Please try again.');
+            return null;
+          }
+          if (!resp.ok) {
+            window.alert('Backup failed (HTTP ' + resp.status + ')');
+            return null;
+          }
+          var disposition = resp.headers.get('Content-Disposition') || '';
+          var match = /filename="?([^";]+)"?/.exec(disposition);
+          var filename = match ? match[1] : 'switchbot_backup.db';
+          return resp.blob().then(function(blob) {
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+          });
+        }).catch(function(err) {
+          window.alert('Backup failed: ' + err);
+        });
       });
     });
   </script>

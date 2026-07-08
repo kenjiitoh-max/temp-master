@@ -88,9 +88,12 @@ The state-changing / data-export endpoints above require an API token that
 matches the backend's `API_TOKEN` environment variable. Provide it via either:
 
 - `Authorization: Bearer <token>` header (preferred), or
-- `X-API-Token: <token>` header, or
-- `?token=<token>` query parameter (only for `GET /api/backup`, since browser
-  downloads cannot set headers; note it can leak into logs).
+- `X-API-Token: <token>` header.
+
+Tokens are only accepted from headers (never a query parameter) to avoid
+leaking the secret into logs, browser history or Referer headers. The frontend
+"Download Backup" button therefore fetches the file with the header and streams
+it to a client-side download rather than opening the URL directly.
 
 Read-only endpoints (`/api/meters`, `/api/meters/{id}/history`, `/api/status`,
 `/api/latency-*`, `/healthz`) remain public.

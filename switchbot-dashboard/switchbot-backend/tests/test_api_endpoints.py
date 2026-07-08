@@ -510,16 +510,23 @@ class TestProtectedEndpointAuth:
 
         assert response.status_code == 200
 
-    async def test_query_param_token_accepted_for_backup(self, client, reset_data_store, api_token, temp_db_path):
+    async def test_backup_download_with_header_token(self, client, reset_data_store, auth_headers, temp_db_path):
         original_db_path = main_module.DB_PATH
         main_module.DB_PATH = temp_db_path
         try:
             await init_database()
-            response = client.get(f"/api/backup?token={api_token}")
+            response = client.get("/api/backup", headers=auth_headers)
 
             assert response.status_code == 200
+            assert response.headers["content-type"] == "application/x-sqlite3"
         finally:
             main_module.DB_PATH = original_db_path
+
+    def test_query_param_token_is_rejected(self, client, api_token):
+        # Tokens must never be accepted from the URL (log/history leakage).
+        response = client.get(f"/api/backup?token={api_token}")
+
+        assert response.status_code == 401
 
     def test_get_endpoints_remain_public(self, client, api_token):
         # Read-only endpoints must not require authentication.

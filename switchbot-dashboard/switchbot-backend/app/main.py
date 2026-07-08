@@ -377,8 +377,12 @@ def get_allowed_origins() -> list[str]:
 
 
 def _extract_request_token(request: Request) -> Optional[str]:
-    """Extract an API token from the Authorization header, X-API-Token header,
-    or a `token` query parameter (the last supports browser file downloads)."""
+    """Extract an API token from the Authorization or X-API-Token header.
+
+    Tokens are intentionally only accepted from headers, never from query
+    parameters, to avoid leaking the secret into server/proxy logs, browser
+    history or Referer headers.
+    """
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         token = auth_header[len("Bearer "):].strip()
@@ -387,9 +391,6 @@ def _extract_request_token(request: Request) -> Optional[str]:
     x_api_token = request.headers.get("X-API-Token", "").strip()
     if x_api_token:
         return x_api_token
-    query_token = request.query_params.get("token", "").strip()
-    if query_token:
-        return query_token
     return None
 
 
