@@ -156,3 +156,19 @@ def mock_switchbot_credentials():
     with patch("app.main.SWITCHBOT_TOKEN", "test-token"), \
          patch("app.main.SWITCHBOT_SECRET", "test-secret"):
         yield
+
+
+TEST_API_TOKEN = "test-api-token"
+
+
+@pytest.fixture
+def api_token() -> Generator[str, None, None]:
+    """Configure a known API token on the server for protected-endpoint tests."""
+    with patch("app.main.API_TOKEN", TEST_API_TOKEN):
+        yield TEST_API_TOKEN
+
+
+@pytest.fixture
+def auth_headers(api_token: str) -> dict:
+    """Authorization header carrying a valid API token."""
+    return {"Authorization": f"Bearer {api_token}"}

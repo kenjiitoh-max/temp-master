@@ -34,6 +34,16 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
    - Tap App Version 10 times to enable Developer Options
    - Go to Developer Options > Get Token
 
+   Additional environment variables for security:
+   - `API_TOKEN` — shared secret required to call the protected endpoints
+     `POST /api/meters/refresh`, `POST /api/import` and `GET /api/backup`.
+     Generate one with `openssl rand -hex 32`. If it is left empty these
+     endpoints are **disabled** (return HTTP 503) so they are never exposed
+     without authentication.
+   - `ALLOWED_ORIGINS` — comma-separated list of origins allowed by CORS.
+     Defaults to the production frontend origin. For local development set e.g.
+     `ALLOWED_ORIGINS=http://localhost:5173,https://temp-master.fly.dev`.
+
 4. Start the development server:
    ```bash
    poetry run fastapi dev app/main.py
@@ -67,8 +77,26 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
 
 - `GET /api/meters` - Returns list of all meter devices with current temperature (from cache)
 - `GET /api/meters/{device_id}/history` - Returns temperature history with time_scale parameter
-- `POST /api/meters/refresh` - Triggers immediate data collection
 - `GET /api/status` - Returns backend status and configuration
+- `POST /api/meters/refresh` - Triggers immediate data collection **(requires API token)**
+- `POST /api/import` - Imports historical device/reading data **(requires API token)**
+- `GET /api/backup` - Downloads the SQLite database file **(requires API token)**
+
+### Authentication
+
+The state-changing / data-export endpoints above require an API token that
+matches the backend's `API_TOKEN` environment variable. Provide it via either:
+
+- `Authorization: Bearer <token>` header (preferred), or
+- `X-API-Token: <token>` header.
+
+Tokens are only accepted from headers (never a query parameter) to avoid
+leaking the secret into logs, browser history or Referer headers. The frontend
+"Download Backup" button therefore fetches the file with the header and streams
+it to a client-side download rather than opening the URL directly.
+
+Read-only endpoints (`/api/meters`, `/api/meters/{id}/history`, `/api/status`,
+`/api/latency-*`, `/healthz`) remain public.
 
 ## Notes
 

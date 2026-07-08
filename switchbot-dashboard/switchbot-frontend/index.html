@@ -152,6 +152,27 @@
     // When opened directly as a file:// URL, fall back to the production backend.
     var API_URL = (window.location.protocol === 'file:') ? 'https://temp-master.fly.dev' : '';
 
+    // API token for protected endpoints (refresh / backup). It is stored in
+    // localStorage rather than hard-coded; the user is prompted the first time
+    // a protected action is triggered. NOTE: keeping a token in the browser is
+    // an anti-pattern (see PR description) and should be replaced by proper
+    // server-side auth or a CLI-only backup workflow.
+    function getApiToken() {
+      var token = window.localStorage.getItem('API_TOKEN');
+      if (!token) {
+        token = window.prompt('Enter the API token for this action:');
+        if (token) {
+          window.localStorage.setItem('API_TOKEN', token);
+        }
+      }
+      return token;
+    }
+
+    // Drop a stored token so the user is re-prompted (e.g. after a 401).
+    function clearApiToken() {
+      window.localStorage.removeItem('API_TOKEN');
+    }
+
     var REFRESH_INTERVAL = 30000;
     var currentTimeScale = 'day';
     var metersData = [];
@@ -274,13 +295,24 @@
     }
 
     function triggerRefresh(callback) {
+      var token = getApiToken();
+      if (!token) {
+        if (callback) callback('API token is required', null);
+        return;
+      }
       $.ajax({
         url: API_URL + '/api/meters/refresh',
         type: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
         success: function(data) {
           if (callback) callback(null, data);
         },
         error: function(xhr, status, err) {
+          // A rejected token is likely stale/incorrect; clear it so the user
+          // is prompted again next time instead of being stuck on 401.
+          if (xhr && xhr.status === 401) {
+            clearApiToken();
+          }
           if (callback) callback(err || status, null);
         }
       });
@@ -545,7 +577,39 @@
       });
 
       $('#btn-backup').click(function() {
-        window.open(API_URL + '/api/backup', '_blank');
+        var token = getApiToken();
+        if (!token) return;
+        // Fetch with the token in the Authorization header (never in the URL,
+        // which could leak into logs/history), then trigger a client-side
+        // download from the response blob.
+        fetch(API_URL + '/api/backup', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        }).then(function(resp) {
+          if (resp.status === 401) {
+            clearApiToken();
+            window.alert('API token was rejected. Please try again.');
+            return null;
+          }
+          if (!resp.ok) {
+            window.alert('Backup failed (HTTP ' + resp.status + ')');
+            return null;
+          }
+          var disposition = resp.headers.get('Content-Disposition') || '';
+          var match = /filename="?([^";]+)"?/.exec(disposition);
+          var filename = match ? match[1] : 'switchbot_backup.db';
+          return resp.blob().then(function(blob) {
+            var url = window.URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+          });
+        }).catch(function(err) {
+          window.alert('Backup failed: ' + err);
+        });
       });
     });
   </script>

@@ -12,9 +12,12 @@
 # Configuration:
 #   Set SWITCHBOT_BACKEND_URL environment variable or edit the default below
 #   Set BACKUP_DIR environment variable to change the backup directory
+#   Set API_TOKEN environment variable to authenticate against /api/backup
+#     (this endpoint now requires the token configured on the backend).
 
 BACKEND_URL="${SWITCHBOT_BACKEND_URL:-https://temp-master.fly.dev}"
 BACKUP_DIR="${BACKUP_DIR:-$HOME/switchbot_backups}"
+API_TOKEN="${API_TOKEN:-}"
 DEFAULT_INTERVAL=3600  # 1 hour in seconds
 
 LOOP_MODE=false
@@ -43,6 +46,7 @@ while [[ $# -gt 0 ]]; do
             echo "Environment variables:"
             echo "  SWITCHBOT_BACKEND_URL  Backend URL (default: https://temp-master.fly.dev)"
             echo "  BACKUP_DIR             Backup directory (default: ~/switchbot_backups)"
+            echo "  API_TOKEN              API token required to access /api/backup"
             exit 0
             ;;
         *)
@@ -53,6 +57,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [ -z "$API_TOKEN" ]; then
+    echo "Error: API_TOKEN environment variable is required." >&2
+    echo "The /api/backup endpoint now requires authentication." >&2
+    echo "Set it with: export API_TOKEN=your_token" >&2
+    exit 1
+fi
+
 mkdir -p "$BACKUP_DIR"
 
 backup_database() {
@@ -61,7 +72,10 @@ backup_database() {
     
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting backup..."
     
-    local http_code=$(curl -s -w "%{http_code}" -o "$backup_file" "$BACKEND_URL/api/backup")
+    # Pass the API token via the Authorization header (preferred over a query
+    # parameter, which could leak into server/proxy logs).
+    local http_code=$(curl -s -w "%{http_code}" -o "$backup_file" \
+        -H "Authorization: Bearer ${API_TOKEN}" "$BACKEND_URL/api/backup")
     
     if [ "$http_code" -eq 200 ]; then
         local file_size=$(ls -lh "$backup_file" | awk '{print $5}')
