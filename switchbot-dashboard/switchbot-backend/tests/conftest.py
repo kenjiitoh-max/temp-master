@@ -156,3 +156,16 @@ def mock_switchbot_credentials():
     with patch("app.main.SWITCHBOT_TOKEN", "test-token"), \
          patch("app.main.SWITCHBOT_SECRET", "test-secret"):
         yield
+
+
+# テスト用のダッシュボードAPIキー。
+TEST_DASHBOARD_API_KEY = "test-dashboard-api-key"
+
+
+@pytest.fixture
+def dashboard_api_key():
+    """DASHBOARD_API_KEY を設定した状態にし、認証ヘッダを返すフィクスチャ。"""
+    import app.main as main_module
+
+    with patch.object(main_module, "DASHBOARD_API_KEY", TEST_DASHBOARD_API_KEY):
+        yield {"X-API-Key": TEST_DASHBOARD_API_KEY}
