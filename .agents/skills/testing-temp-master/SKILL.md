@@ -74,6 +74,26 @@ poetry run fastapi run app/main.py --host 0.0.0.0 --port 8000
 With Option B the frontend is served at `http://localhost:8000/`; the API docs
 are always at `http://localhost:8000/docs`.
 
+Note: Poetry may create the venv outside the project (e.g.
+`~/.cache/pypoetry/virtualenvs/...`), so `.venv/bin/fastapi` may not exist. Use
+`poetry run fastapi ...`, or resolve the path with `poetry env info --path`.
+
+### 5. Seeding data WITHOUT SwitchBot credentials (for UI testing)
+
+The backend exposes a credential-free `POST /api/import` endpoint that accepts
+`{"devices": [{device_id, device_name, device_type, current_temperature,
+current_humidity, battery, last_updated, readings: [{timestamp, temperature,
+humidity}]}]}` and populates both the in-memory store and the SQLite DB. This
+lets you exercise the full UI (meter cards, per-time-scale history charts,
+themes) with no real credentials. `GET /api/status` will report
+`configured: false` but meters/history still return the imported data. Use names
+present in `src/utils/displayNames.ts` `DISPLAY_NAMES` (e.g. "Bedroom Meter")
+to exercise the `getDisplayName` mapping. Generate readings across ranges:
+every few minutes for the last ~2h (hour/day), hourly for ~30 days (week/month),
+and daily for ~365 days (year). Live collection ("Refresh Data",
+`POST /api/meters/refresh`) still requires real credentials and returns 500
+without them.
+
 ## Key Test Points
 
 ### Branding Verification
