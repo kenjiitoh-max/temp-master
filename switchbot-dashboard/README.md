@@ -41,6 +41,9 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
 
 ### Frontend
 
+The frontend is a React 18 + TypeScript single-page app built with Vite and
+charts rendered with Recharts.
+
 1. Navigate to the frontend directory:
    ```bash
    cd switchbot-frontend
@@ -51,7 +54,9 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
    npm install
    ```
 
-3. Copy `.env.example` to `.env`:
+3. (Optional) copy `.env.example` to `.env` if you need to point the app at a
+   non-default backend. Leave `VITE_API_URL` empty to use the same origin;
+   during `npm run dev`, `/api` requests are proxied to `http://localhost:8000`.
    ```bash
    cp .env.example .env
    ```
@@ -61,7 +66,21 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
    npm run dev
    ```
 
-5. Open http://localhost:5173 in your browser
+5. Open http://localhost:5173 in your browser.
+
+6. Build a production bundle (output in `dist/`, used by the Docker image):
+   ```bash
+   npm run build
+   ```
+
+#### Themes
+
+The dashboard ships with multiple color themes (**Dark**, **Light**,
+**Solarized**, **Ocean**), implemented with CSS custom properties and toggled
+via the theme selector in the navbar. The chosen theme changes the background,
+panels, text, accent colors, and chart line/grid colors. The selection is
+persisted to `localStorage`, and the initial theme respects the OS
+`prefers-color-scheme` setting.
 
 ## API Endpoints
 
