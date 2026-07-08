@@ -268,15 +268,15 @@ class TestGetMeterHistoryEndpoint:
 
 
 class TestRefreshMetersEndpoint:
-    def test_refresh_meters_no_credentials(self, client):
+    def test_refresh_meters_no_credentials(self, client, dashboard_api_key):
         with patch.object(main_module, "SWITCHBOT_TOKEN", ""), \
              patch.object(main_module, "SWITCHBOT_SECRET", ""):
-            response = client.post("/api/meters/refresh")
+            response = client.post("/api/meters/refresh", headers=dashboard_api_key)
             
             assert response.status_code == 500
             assert "credentials not configured" in response.json()["detail"].lower()
 
-    def test_refresh_meters_success(self, client, reset_data_store):
+    def test_refresh_meters_success(self, client, reset_data_store, dashboard_api_key):
         with patch.object(main_module, "SWITCHBOT_TOKEN", "test-token"), \
              patch.object(main_module, "SWITCHBOT_SECRET", "test-secret"), \
              patch("app.main.collect_data", new_callable=AsyncMock) as mock_collect:
@@ -287,13 +287,33 @@ class TestRefreshMetersEndpoint:
                 device_type="Meter",
             )
             
-            response = client.post("/api/meters/refresh")
+            response = client.post("/api/meters/refresh", headers=dashboard_api_key)
             
             assert response.status_code == 200
             data = response.json()
             assert data["status"] == "ok"
             assert data["meters_count"] == 1
             mock_collect.assert_called_once()
+
+    def test_refresh_meters_requires_api_key(self, client):
+        with patch.object(main_module, "DASHBOARD_API_KEY", "configured-key"):
+            response = client.post("/api/meters/refresh")
+
+            assert response.status_code == 401
+
+    def test_refresh_meters_wrong_api_key(self, client):
+        with patch.object(main_module, "DASHBOARD_API_KEY", "configured-key"):
+            response = client.post(
+                "/api/meters/refresh", headers={"X-API-Key": "wrong-key"}
+            )
+
+            assert response.status_code == 401
+
+    def test_refresh_meters_key_not_configured_returns_503(self, client):
+        with patch.object(main_module, "DASHBOARD_API_KEY", ""):
+            response = client.post("/api/meters/refresh")
+
+            assert response.status_code == 503
 
 
 class TestGetStatusEndpoint:
@@ -350,7 +370,7 @@ class TestGetStatusEndpoint:
 
 
 class TestImportDataEndpoint:
-    async def test_import_data_creates_devices(self, client, reset_data_store, temp_db_path):
+    async def test_import_data_creates_devices(self, client, reset_data_store, temp_db_path, dashboard_api_key):
         original_db_path = main_module.DB_PATH
         main_module.DB_PATH = temp_db_path
         
@@ -372,7 +392,7 @@ class TestImportDataEndpoint:
                 ]
             }
             
-            response = client.post("/api/import", json=import_data)
+            response = client.post("/api/import", json=import_data, headers=dashboard_api_key)
             
             assert response.status_code == 200
             data = response.json()
@@ -385,7 +405,7 @@ class TestImportDataEndpoint:
         finally:
             main_module.DB_PATH = original_db_path
 
-    async def test_import_data_creates_readings(self, client, reset_data_store, temp_db_path):
+    async def test_import_data_creates_readings(self, client, reset_data_store, temp_db_path, dashboard_api_key):
         original_db_path = main_module.DB_PATH
         main_module.DB_PATH = temp_db_path
         
@@ -416,7 +436,7 @@ class TestImportDataEndpoint:
                 ]
             }
             
-            response = client.post("/api/import", json=import_data)
+            response = client.post("/api/import", json=import_data, headers=dashboard_api_key)
             
             assert response.status_code == 200
             data = response.json()
@@ -425,7 +445,7 @@ class TestImportDataEndpoint:
         finally:
             main_module.DB_PATH = original_db_path
 
-    async def test_import_data_multiple_devices(self, client, reset_data_store, temp_db_path):
+    async def test_import_data_multiple_devices(self, client, reset_data_store, temp_db_path, dashboard_api_key):
         original_db_path = main_module.DB_PATH
         main_module.DB_PATH = temp_db_path
         
@@ -449,7 +469,7 @@ class TestImportDataEndpoint:
                 ]
             }
             
-            response = client.post("/api/import", json=import_data)
+            response = client.post("/api/import", json=import_data, headers=dashboard_api_key)
             
             assert response.status_code == 200
             data = response.json()
@@ -460,12 +480,68 @@ class TestImportDataEndpoint:
         finally:
             main_module.DB_PATH = original_db_path
 
-    def test_import_data_empty_devices(self, client, reset_data_store):
+    def test_import_data_empty_devices(self, client, reset_data_store, dashboard_api_key):
         import_data = {"devices": []}
         
-        response = client.post("/api/import", json=import_data)
+        response = client.post("/api/import", json=import_data, headers=dashboard_api_key)
         
         assert response.status_code == 200
         data = response.json()
         assert data["imported_devices"] == 0
         assert data["imported_readings"] == 0
+
+    def test_import_data_requires_api_key(self, client, reset_data_store):
+        with patch.object(main_module, "DASHBOARD_API_KEY", "configured-key"):
+            response = client.post("/api/import", json={"devices": []})
+
+            assert response.status_code == 401
+
+    def test_import_data_wrong_api_key(self, client, reset_data_store):
+        with patch.object(main_module, "DASHBOARD_API_KEY", "configured-key"):
+            response = client.post(
+                "/api/import", json={"devices": []}, headers={"X-API-Key": "wrong-key"}
+            )
+
+            assert response.status_code == 401
+
+    def test_import_data_key_not_configured_returns_503(self, client, reset_data_store):
+        with patch.object(main_module, "DASHBOARD_API_KEY", ""):
+            response = client.post("/api/import", json={"devices": []})
+
+            assert response.status_code == 503
+
+
+class TestBackupEndpoint:
+    async def test_backup_success_with_api_key(
+        self, client, reset_data_store, temp_db_path, dashboard_api_key
+    ):
+        original_db_path = main_module.DB_PATH
+        main_module.DB_PATH = temp_db_path
+
+        try:
+            await init_database()
+
+            response = client.get("/api/backup", headers=dashboard_api_key)
+
+            assert response.status_code == 200
+            assert response.headers["content-type"] == "application/x-sqlite3"
+        finally:
+            main_module.DB_PATH = original_db_path
+
+    def test_backup_requires_api_key(self, client):
+        with patch.object(main_module, "DASHBOARD_API_KEY", "configured-key"):
+            response = client.get("/api/backup")
+
+            assert response.status_code == 401
+
+    def test_backup_wrong_api_key(self, client):
+        with patch.object(main_module, "DASHBOARD_API_KEY", "configured-key"):
+            response = client.get("/api/backup", headers={"X-API-Key": "wrong-key"})
+
+            assert response.status_code == 401
+
+    def test_backup_key_not_configured_returns_503(self, client):
+        with patch.object(main_module, "DASHBOARD_API_KEY", ""):
+            response = client.get("/api/backup")
+
+            assert response.status_code == 503

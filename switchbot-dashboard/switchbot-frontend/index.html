@@ -158,6 +158,46 @@
     var statusData = null;
     var charts = {}; // device_id -> Chart instance map
 
+    // ============================================================
+    // API key handling
+    // ============================================================
+    // 認証必須の機密・変更系エンドポイント（/api/meters/refresh, /api/backup）を
+    // 呼ぶ際に X-API-Key ヘッダで送信するためのキー。localStorage に保存する。
+    var API_KEY_STORAGE = 'dashboardApiKey';
+
+    function getApiKey() {
+      try {
+        return window.localStorage.getItem(API_KEY_STORAGE) || '';
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function setApiKey(key) {
+      try {
+        if (key) {
+          window.localStorage.setItem(API_KEY_STORAGE, key);
+        } else {
+          window.localStorage.removeItem(API_KEY_STORAGE);
+        }
+      } catch (e) {
+        // localStorage が使えない環境では無視する
+      }
+    }
+
+    // キーが未設定なら入力を促し、保存して返す。キャンセル時は空文字を返す。
+    function ensureApiKey() {
+      var key = getApiKey();
+      if (!key) {
+        key = window.prompt('APIキー（X-API-Key）を入力してください。この操作には認証が必要です。');
+        if (key) {
+          key = key.trim();
+          setApiKey(key);
+        }
+      }
+      return key || '';
+    }
+
     var DISPLAY_NAMES = {
       'Bedroom Meter': '第1蒸留塔 (T-101)',
       'Living Meter': '第2蒸留塔 (T-102)',
@@ -274,15 +314,53 @@
     }
 
     function triggerRefresh(callback) {
+      var apiKey = ensureApiKey();
+      if (!apiKey) {
+        if (callback) callback('APIキーが設定されていません', null);
+        return;
+      }
       $.ajax({
         url: API_URL + '/api/meters/refresh',
         type: 'POST',
+        headers: { 'X-API-Key': apiKey },
         success: function(data) {
           if (callback) callback(null, data);
         },
         error: function(xhr, status, err) {
           if (callback) callback(err || status, null);
         }
+      });
+    }
+
+    // backup は認証ヘッダ付きで取得する必要があるため fetch + Blob でダウンロードする。
+    function downloadBackup(onError) {
+      var apiKey = ensureApiKey();
+      if (!apiKey) {
+        if (onError) onError('APIキーが設定されていません');
+        return;
+      }
+      fetch(API_URL + '/api/backup', {
+        method: 'GET',
+        headers: { 'X-API-Key': apiKey }
+      }).then(function(resp) {
+        if (!resp.ok) {
+          throw new Error('HTTP ' + resp.status);
+        }
+        var disposition = resp.headers.get('Content-Disposition') || '';
+        var match = /filename="?([^"]+)"?/.exec(disposition);
+        var filename = match ? match[1] : 'switchbot_backup.db';
+        return resp.blob().then(function(blob) {
+          var url = window.URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+        });
+      }).catch(function(err) {
+        if (onError) onError(err && err.message ? err.message : String(err));
       });
     }
 
@@ -545,7 +623,9 @@
       });
 
       $('#btn-backup').click(function() {
-        window.open(API_URL + '/api/backup', '_blank');
+        downloadBackup(function(err) {
+          showError('Failed to download backup: ' + err);
+        });
       });
     });
   </script>

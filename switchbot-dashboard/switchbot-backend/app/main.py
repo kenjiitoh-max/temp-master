@@ -3,6 +3,7 @@ import base64
 import hashlib
 import hmac
 import os
+import secrets
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -15,9 +16,10 @@ import httpx
 from dotenv import load_dotenv
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
 load_dotenv()
@@ -28,6 +30,22 @@ DB_PATH = os.getenv("DB_PATH", "/data/app.db" if os.path.exists("/data") else "a
 SWITCHBOT_API_BASE = "https://api.switch-bot.com/v1.1"
 SWITCHBOT_TOKEN = os.getenv("SWITCHBOT_TOKEN", "")
 SWITCHBOT_SECRET = os.getenv("SWITCHBOT_SECRET", "")
+
+# ダッシュボードAPIキー認証設定
+# DASHBOARD_API_KEY: 機密・変更系エンドポイントの保護に用いる共有キー。
+#   未設定の場合、機密エンドポイントは 503 を返し「無認証で開放しない」安全側の
+#   挙動とする（下記 require_api_key を参照）。
+DASHBOARD_API_KEY = os.getenv("DASHBOARD_API_KEY", "")
+API_KEY_HEADER_NAME = "X-API-Key"
+
+# CORS設定
+# ALLOWED_ORIGINS: カンマ区切りで許可オリジンを明示指定する。
+#   未設定時は空リスト（同一オリジン運用を想定）とし、ワイルドカードは既定にしない。
+def _parse_allowed_origins(raw: str) -> list[str]:
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+ALLOWED_ORIGINS = _parse_allowed_origins(os.getenv("ALLOWED_ORIGINS", ""))
 
 DATA_COLLECTION_INTERVAL = 120
 RATE_LIMIT_BACKOFF_BASE = 60
@@ -86,6 +104,30 @@ class DataStore:
 
 
 data_store = DataStore()
+
+
+# APIキー認証用ヘッダ。auto_error=False とし、キー欠如時の応答（401/503）は
+# require_api_key 内で明示的に制御する。
+api_key_header = APIKeyHeader(name=API_KEY_HEADER_NAME, auto_error=False)
+
+
+async def require_api_key(api_key: Optional[str] = Depends(api_key_header)) -> str:
+    """機密・変更系エンドポイント向けの共通認証Dependency。
+
+    - DASHBOARD_API_KEY が未設定の場合は 503 を返し、無認証での開放を防ぐ（安全側）。
+    - リクエストの X-API-Key が未指定、または不一致の場合は 401 を返す。
+    - 比較は secrets.compare_digest によるタイミング攻撃耐性のある定数時間比較で行う。
+    """
+    # モジュール属性経由で参照し、テスト等での差し替え（patch）を可能にする。
+    expected_key = DASHBOARD_API_KEY
+    if not expected_key:
+        raise HTTPException(
+            status_code=503,
+            detail="APIキーが未設定のため、この操作は利用できません（DASHBOARD_API_KEY を設定してください）",
+        )
+    if not api_key or not secrets.compare_digest(api_key, expected_key):
+        raise HTTPException(status_code=401, detail="APIキーが無効です")
+    return api_key
 
 
 async def init_database():
@@ -586,12 +628,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# ワイルドカード（"*"）と allow_credentials=True の併用はブラウザ仕様上も危険なため、
+# allow_origins に "*" が含まれる場合は credentials を無効化する。
+_cors_allow_credentials = "*" not in ALLOWED_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=_cors_allow_credentials,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", API_KEY_HEADER_NAME],
 )
 
 
@@ -600,6 +646,10 @@ async def healthz():
     return {"status": "ok"}
 
 
+# 注意: 以下の読み取り専用エンドポイント（/api/meters, /api/meters/{id}/history,
+# /api/status, /api/latency-logs, /api/latency-stats, /healthz）は公開ダッシュボードが
+# 利用するため、既定では認証を課さない。機密情報を返すよう変更する場合は
+# require_api_key の付与を検討すること。
 @app.get("/api/meters")
 async def get_meters():
     meters = list(data_store.devices.values())
@@ -642,7 +692,8 @@ async def get_meter_history(device_id: str, time_scale: TimeScale = TimeScale.HO
 
 
 @app.post("/api/meters/refresh")
-async def refresh_meters():
+async def refresh_meters(_: str = Depends(require_api_key)):
+    # 変更系: 外部SwitchBot API呼び出しを誘発しうるためAPIキー認証を必須とする（DoS対策）。
     if not SWITCHBOT_TOKEN or not SWITCHBOT_SECRET:
         raise HTTPException(status_code=500, detail="SwitchBot credentials not configured")
     
@@ -730,8 +781,9 @@ class ImportData(BaseModel):
 
 
 @app.post("/api/import")
-async def import_data(data: ImportData):
+async def import_data(data: ImportData, _: str = Depends(require_api_key)):
     """Import historical data from another backend instance."""
+    # 変更系: DBへ任意データを書き込めるためAPIキー認証を必須とする（データ改ざん対策）。
     imported_devices = 0
     imported_readings = 0
     
@@ -774,8 +826,9 @@ async def import_data(data: ImportData):
 
 
 @app.get("/api/backup")
-async def backup_database():
+async def backup_database(_: str = Depends(require_api_key)):
     """Download the SQLite database file for backup purposes."""
+    # 機密: SQLite DB全体を返すためAPIキー認証を必須とする（データ流出対策）。
     if not os.path.exists(DB_PATH):
         raise HTTPException(status_code=404, detail="Database file not found")
     
