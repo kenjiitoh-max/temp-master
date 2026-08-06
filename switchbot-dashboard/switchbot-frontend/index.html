@@ -61,6 +61,77 @@
       padding: 2px 8px;
       border-radius: 10px;
     }
+    #btn-theme-toggle {
+      margin-left: 8px;
+    }
+
+    /* ---------- Dark theme ---------- */
+    body.dark-theme {
+      background-color: #1e1e2e;
+      color: #cdd6f4;
+    }
+    body.dark-theme .navbar-default {
+      background-color: #181825;
+      border-color: #313244;
+    }
+    body.dark-theme .navbar-default .navbar-brand,
+    body.dark-theme .navbar-default .navbar-nav > li > a {
+      color: #cdd6f4;
+    }
+    body.dark-theme .navbar-default .navbar-nav > .active > a,
+    body.dark-theme .navbar-default .navbar-nav > li > a:hover,
+    body.dark-theme .navbar-default .navbar-nav > li > a:focus {
+      background-color: #313244;
+      color: #ffffff;
+    }
+    body.dark-theme .panel {
+      background-color: #272739;
+      border-color: #313244;
+    }
+    body.dark-theme .panel-default > .panel-heading {
+      background-color: #313244;
+      border-color: #45475a;
+      color: #cdd6f4;
+    }
+    body.dark-theme .form-control {
+      background-color: #1e1e2e;
+      border-color: #45475a;
+      color: #cdd6f4;
+    }
+    body.dark-theme .btn-default {
+      background-color: #313244;
+      border-color: #45475a;
+      color: #cdd6f4;
+    }
+    body.dark-theme .btn-default:hover,
+    body.dark-theme .btn-default:focus {
+      background-color: #45475a;
+      color: #ffffff;
+    }
+    body.dark-theme .alert-info {
+      background-color: #1f3549;
+      border-color: #2a4a63;
+      color: #a6d8f5;
+    }
+    body.dark-theme .alert-warning {
+      background-color: #4a3a1c;
+      border-color: #6b5426;
+      color: #f9e2af;
+    }
+    body.dark-theme .alert-danger {
+      background-color: #4a2224;
+      border-color: #6b3033;
+      color: #f38ba8;
+    }
+    body.dark-theme .text-muted,
+    body.dark-theme footer,
+    body.dark-theme .meter-last-updated {
+      color: #9399b2;
+    }
+    body.dark-theme .device-type-tag {
+      background-color: #45475a;
+      color: #bac2de;
+    }
   </style>
 </head>
 <body>
@@ -76,6 +147,7 @@
       </ul>
       <div class="navbar-status pull-right">
         <span id="connection-status" class="label label-success">Connected</span>
+        <button type="button" id="btn-theme-toggle" class="btn btn-default btn-xs" title="Toggle dark theme">🌙</button>
       </div>
     </div>
   </nav>
@@ -157,6 +229,9 @@
     var metersData = [];
     var statusData = null;
     var charts = {}; // device_id -> Chart instance map
+    var renderedDeviceIds = []; // device ids currently rendered in the DOM
+
+    var THEME_STORAGE_KEY = 'tempmaster-theme';
 
     var DISPLAY_NAMES = {
       'Bedroom Meter': '第1蒸留塔 (T-101)',
@@ -351,10 +426,26 @@
     // ============================================================
 
     function renderMeters() {
-      renderDefaultView();
+      var ids = [];
+      for (var i = 0; i < metersData.length; i++) {
+        ids.push(metersData[i].device_id);
+      }
+
+      if (ids.join('|') !== renderedDeviceIds.join('|')) {
+        renderDefaultView();
+        renderedDeviceIds = ids;
+        return;
+      }
+
+      // Same device set: update the existing panels in place so the canvas
+      // elements (and their Chart.js instances) survive the refresh.
+      for (var j = 0; j < metersData.length; j++) {
+        updateMeterPanel(metersData[j]);
+      }
     }
 
     function renderDefaultView() {
+      destroyAllCharts();
       var html = '<div class="row">';
       for (var i = 0; i < metersData.length; i++) {
         html += '<div class="col-md-4 col-sm-6">' + createMeterPanel(metersData[i]) + '</div>';
@@ -363,22 +454,8 @@
       $('#meters-container').html(html);
     }
 
-    function createMeterPanel(meter) {
-      var deviceId = escapeHtml(meter.device_id);
-      var deviceName = escapeHtml(getDisplayName(meter.device_name));
-      var deviceType = escapeHtml(meter.device_type);
-
+    function meterStatsHtml(meter) {
       var html = '';
-      html += '<div class="panel panel-default">';
-      html += '  <div class="panel-heading">';
-      html += '    <div class="meter-panel-header">';
-      html += '      <strong>' + deviceName + '</strong>';
-      html += '      <span class="device-type-tag">' + deviceType + '</span>';
-      html += '    </div>';
-      html += '  </div>';
-      html += '  <div class="panel-body">';
-      html += '    <div class="meter-stats">';
-
       if (meter.current_temperature !== null && meter.current_temperature !== undefined) {
         html += '<span class="label label-danger">' + escapeHtml(meter.current_temperature) + '\u00b0C</span>';
       }
@@ -388,21 +465,46 @@
       if (meter.battery !== null && meter.battery !== undefined) {
         html += '<span class="label label-success">' + escapeHtml(meter.battery) + '%</span>';
       }
+      return html;
+    }
 
+    function lastUpdatedText(meter) {
+      if (!meter.last_updated) return '';
+      return 'Last updated: ' + new Date(meter.last_updated).toLocaleString();
+    }
+
+    function createMeterPanel(meter) {
+      var deviceId = escapeHtml(meter.device_id);
+      var deviceName = escapeHtml(getDisplayName(meter.device_name));
+      var deviceType = escapeHtml(meter.device_type);
+
+      var html = '';
+      html += '<div class="panel panel-default meter-panel" data-device-id="' + deviceId + '">';
+      html += '  <div class="panel-heading">';
+      html += '    <div class="meter-panel-header">';
+      html += '      <strong>' + deviceName + '</strong>';
+      html += '      <span class="device-type-tag">' + deviceType + '</span>';
       html += '    </div>';
+      html += '  </div>';
+      html += '  <div class="panel-body">';
+      html += '    <div class="meter-stats">' + meterStatsHtml(meter) + '</div>';
       html += '    <div class="meter-chart-wrap">';
       html += '      <canvas id="chart-' + deviceId + '"></canvas>';
       html += '    </div>';
-
-      if (meter.last_updated) {
-        var d = new Date(meter.last_updated);
-        var lastUpdatedStr = d.toLocaleString();
-        html += '    <p class="meter-last-updated">Last updated: ' + escapeHtml(lastUpdatedStr) + '</p>';
-      }
-
+      html += '    <p class="meter-last-updated">' + escapeHtml(lastUpdatedText(meter)) + '</p>';
       html += '  </div>';
       html += '</div>';
       return html;
+    }
+
+    function updateMeterPanel(meter) {
+      var $panel = $('#meters-container').find('.meter-panel').filter(function() {
+        return $(this).attr('data-device-id') === String(meter.device_id);
+      });
+      if (!$panel.length) return;
+
+      $panel.find('.meter-stats').html(meterStatsHtml(meter));
+      $panel.find('.meter-last-updated').text(lastUpdatedText(meter));
     }
 
     // ============================================================
@@ -423,6 +525,13 @@
       }
     }
 
+    function chartThemeColors() {
+      if (isDarkTheme()) {
+        return { tick: '#bac2de', grid: 'rgba(255, 255, 255, 0.12)' };
+      }
+      return { tick: '#777', grid: 'rgba(0, 0, 0, 0.05)' };
+    }
+
     function renderSingleChart(deviceId, history) {
       var canvas = document.getElementById('chart-' + deviceId);
       if (!canvas) return;
@@ -435,11 +544,17 @@
         temperatures.push(history[i].temperature);
       }
 
-      // Destroy existing chart instance before re-creating
-      if (charts[deviceId]) {
-        charts[deviceId].destroy();
-        delete charts[deviceId];
+      // Update the existing instance in place: re-creating it would replay the
+      // load animation and drop hover state on every auto-refresh.
+      var existing = charts[deviceId];
+      if (existing) {
+        existing.data.labels = labels;
+        existing.data.datasets[0].data = temperatures;
+        existing.update();
+        return;
       }
+
+      var themeColors = chartThemeColors();
 
       charts[deviceId] = new Chart(ctx, {
         type: 'line',
@@ -482,23 +597,23 @@
               display: true,
               gridLines: {
                 display: true,
-                color: 'rgba(0, 0, 0, 0.05)'
+                color: themeColors.grid
               },
               ticks: {
                 maxTicksLimit: 8,
                 fontSize: 10,
-                fontColor: '#777'
+                fontColor: themeColors.tick
               }
             }],
             yAxes: [{
               display: true,
               gridLines: {
                 display: true,
-                color: 'rgba(0, 0, 0, 0.05)'
+                color: themeColors.grid
               },
               ticks: {
                 fontSize: 10,
-                fontColor: '#777',
+                fontColor: themeColors.tick,
                 callback: function(value) {
                   return value + '\u00b0';
                 }
@@ -519,10 +634,42 @@
     }
 
     // ============================================================
+    // Theme
+    // ============================================================
+
+    function isDarkTheme() {
+      return $('body').hasClass('dark-theme');
+    }
+
+    function readStoredTheme() {
+      try {
+        return window.localStorage.getItem(THEME_STORAGE_KEY);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function storeTheme(theme) {
+      try {
+        window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+      } catch (e) {
+        // localStorage unavailable (private mode / file:// restrictions)
+      }
+    }
+
+    function applyTheme(theme) {
+      var dark = theme === 'dark';
+      $('body').toggleClass('dark-theme', dark);
+      $('#btn-theme-toggle').text(dark ? '\u2600\ufe0f' : '\ud83c\udf19');
+    }
+
+    // ============================================================
     // Init
     // ============================================================
 
     $(document).ready(function() {
+      applyTheme(readStoredTheme() === 'dark' ? 'dark' : 'light');
+
       fetchData();
       setInterval(fetchData, REFRESH_INTERVAL);
 
@@ -532,15 +679,26 @@
         renderCharts();
       });
 
+      $('#btn-theme-toggle').click(function() {
+        var next = isDarkTheme() ? 'light' : 'dark';
+        applyTheme(next);
+        storeTheme(next);
+        destroyAllCharts();
+        renderCharts();
+      });
+
       $('#btn-refresh').click(function() {
         var $btn = $(this);
         $btn.prop('disabled', true).text('Refreshing...');
+        // The backend only acknowledges the request; collection runs in the
+        // background, so give it a moment before pulling the new values.
         triggerRefresh(function(err) {
+          $btn.prop('disabled', false).text('Refresh Data');
           if (err) {
             showError('Failed to refresh: ' + err);
+            return;
           }
-          fetchData();
-          $btn.prop('disabled', false).text('Refresh Data');
+          setTimeout(fetchData, 3000);
         });
       });
 
