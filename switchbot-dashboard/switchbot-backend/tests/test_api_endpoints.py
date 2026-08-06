@@ -7,14 +7,41 @@ from fastapi.testclient import TestClient
 
 import app.main as main_module
 from app.main import (
+    HISTORY_TARGET_POINTS,
     MeterDevice,
     MeterReading,
     TimeScale,
     app,
     data_store,
+    downsample_readings,
     init_database,
     save_reading_to_db,
 )
+
+
+def _make_readings(count: int) -> list[MeterReading]:
+    base = datetime.now(timezone.utc) - timedelta(days=30)
+    return [
+        MeterReading(timestamp=base + timedelta(minutes=i), temperature=20.0 + i, humidity=50)
+        for i in range(count)
+    ]
+
+
+class TestDownsampleReadings:
+    def test_keeps_short_series_untouched(self):
+        readings = _make_readings(10)
+        
+        assert downsample_readings(readings, HISTORY_TARGET_POINTS) == readings
+
+    def test_reduces_long_series_to_target(self):
+        readings = _make_readings(5000)
+        
+        sampled = downsample_readings(readings, HISTORY_TARGET_POINTS)
+        
+        assert len(sampled) <= HISTORY_TARGET_POINTS + 1
+        assert sampled[0] == readings[0]
+        assert sampled[-1] == readings[-1]
+        assert sampled == sorted(sampled, key=lambda r: r.timestamp)
 
 
 @pytest.fixture
@@ -291,7 +318,7 @@ class TestRefreshMetersEndpoint:
             
             assert response.status_code == 200
             data = response.json()
-            assert data["status"] == "ok"
+            assert data["status"] == "accepted"
             assert data["meters_count"] == 1
             mock_collect.assert_called_once()
 

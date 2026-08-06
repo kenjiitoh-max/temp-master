@@ -2,6 +2,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import math
 import os
 import time
 import uuid
@@ -32,6 +33,9 @@ SWITCHBOT_SECRET = os.getenv("SWITCHBOT_SECRET", "")
 DATA_COLLECTION_INTERVAL = 120
 RATE_LIMIT_BACKOFF_BASE = 60
 MAX_BACKOFF = 600
+
+# Target number of points returned for long time scales (week/month/year)
+HISTORY_TARGET_POINTS = 300
 
 METER_DEVICE_TYPES = ["Meter", "MeterPlus", "WoIOSensor", "Meter Plus (JP)", "Meter Pro", "Meter Pro CO2", "Hub 2"]
 
@@ -82,6 +86,7 @@ class DataStore:
         self.consecutive_errors: int = 0
         self.is_collecting: bool = False
         self.collection_task: Optional[asyncio.Task] = None
+        self.refresh_tasks: set[asyncio.Task] = set()
         self.db_initialized: bool = False
 
 
@@ -218,6 +223,21 @@ async def get_readings_from_db(device_id: str, cutoff_timestamp: float) -> list[
                 )
                 readings.append(reading)
     return readings
+
+
+def downsample_readings(readings: list[MeterReading], target_points: int) -> list[MeterReading]:
+    """Reduce readings to roughly target_points by keeping every Nth reading.
+
+    The most recent reading is always preserved so the chart ends at the latest value.
+    """
+    if target_points <= 0 or len(readings) <= target_points:
+        return readings
+
+    step = math.ceil(len(readings) / target_points)
+    sampled = readings[::step]
+    if sampled[-1] is not readings[-1]:
+        sampled.append(readings[-1])
+    return sampled
 
 
 async def cleanup_old_readings():
@@ -633,6 +653,9 @@ async def get_meter_history(device_id: str, time_scale: TimeScale = TimeScale.HO
     # Read from database for persistent history
     filtered_history = await get_readings_from_db(device_id, cutoff)
     
+    if time_scale in (TimeScale.WEEK, TimeScale.MONTH, TimeScale.YEAR):
+        filtered_history = downsample_readings(filtered_history, HISTORY_TARGET_POINTS)
+    
     return {
         "device_id": device_id,
         "time_scale": time_scale,
@@ -646,11 +669,15 @@ async def refresh_meters():
     if not SWITCHBOT_TOKEN or not SWITCHBOT_SECRET:
         raise HTTPException(status_code=500, detail="SwitchBot credentials not configured")
     
-    await collect_data()
+    # Run collection in the background so the client is not blocked by slow
+    # SwitchBot API calls or an active rate-limit backoff.
+    task = asyncio.create_task(collect_data())
+    data_store.refresh_tasks.add(task)
+    task.add_done_callback(data_store.refresh_tasks.discard)
     
     return {
-        "status": "ok",
-        "message": "Data collection triggered",
+        "status": "accepted",
+        "message": "Data collection started",
         "meters_count": len(data_store.devices),
     }
 
