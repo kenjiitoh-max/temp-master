@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>TSUBASA-Legacy 統合基幹業務システム</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="mainframe">
+  <div class="titlebar">
+    <span class="titlebar-text">■ TSUBASA-Legacy 統合基幹業務システム Ver 3.2.1 (1998年導入) ■</span>
+    <span class="titlebar-clock" id="clock"></span>
+  </div>
+  <div class="menubar">
+    ファイル(F)&nbsp;&nbsp;編集(E)&nbsp;&nbsp;表示(V)&nbsp;&nbsp;帳票(P)&nbsp;&nbsp;ヘルプ(H)
+  </div>
+
+  <div class="tabbar">
+    <button class="tab active" data-panel="panel-air">✈ 航空:つばさ航空</button>
+    <button class="tab" data-panel="panel-bank">¥ 金融:みらい信用銀行</button>
+    <button class="tab" data-panel="panel-retail">🛒 小売:さくらマート</button>
+  </div>
+
+  <!-- ================= 航空 ================= -->
+  <div class="panel" id="panel-air">
+    <fieldset>
+      <legend>本日の運航状況 (便照会 F2)</legend>
+      <table class="grid" id="tbl-flights">
+        <thead>
+          <tr><th>便名</th><th>出発地</th><th>到着地</th><th>出発</th><th>到着</th><th>機材</th><th>運航状況</th><th>予約数/座席数</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </fieldset>
+
+    <fieldset>
+      <legend>予約管理 (PNR照会 F5)</legend>
+      <table class="grid" id="tbl-reservations">
+        <thead>
+          <tr><th>PNR</th><th>搭乗者名(カナ)</th><th>便名</th><th>クラス</th><th>状態</th><th>登録日時</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="formrow">
+        <label>搭乗者名(カナ):</label><input type="text" id="res-name" size="20">
+        <label>便名:</label><select id="res-flight"></select>
+        <label>クラス:</label>
+        <select id="res-class">
+          <option>普通席</option>
+          <option>プレミアム</option>
+        </select>
+        <button id="btn-reserve">予約登録(F8)</button>
+      </div>
+      <div class="msgline" id="msg-air"></div>
+    </fieldset>
+  </div>
+
+  <!-- ================= 金融 ================= -->
+  <div class="panel hidden" id="panel-bank">
+    <fieldset>
+      <legend>口座元帳照会 (F2)</legend>
+      <table class="grid" id="tbl-accounts">
+        <thead>
+          <tr><th>口座番号</th><th>名義人(カナ)</th><th>種別</th><th>残高(円)</th><th>取扱店</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </fieldset>
+
+    <fieldset>
+      <legend>振込処理 (F6)</legend>
+      <table class="grid" id="tbl-transactions">
+        <thead>
+          <tr><th>番号</th><th>日付</th><th>出金口座</th><th>入金口座</th><th>金額(円)</th><th>摘要</th><th>状態</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="formrow">
+        <label>出金口座:</label><select id="tr-from"></select>
+        <label>入金口座:</label><select id="tr-to"></select>
+        <label>金額:</label><input type="text" id="tr-amount" size="10">
+        <label>摘要:</label><input type="text" id="tr-memo" size="16">
+        <button id="btn-transfer">振込実行(F8)</button>
+      </div>
+      <div class="msgline" id="msg-bank"></div>
+    </fieldset>
+  </div>
+
+  <!-- ================= 小売 ================= -->
+  <div class="panel hidden" id="panel-retail">
+    <fieldset>
+      <legend>在庫マスタ照会 (F2)</legend>
+      <table class="grid" id="tbl-inventory">
+        <thead>
+          <tr><th>商品コード</th><th>商品名</th><th>分類</th><th>売価(円)</th><th>在庫数</th><th>発注点</th><th>判定</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </fieldset>
+
+    <fieldset>
+      <legend>売上登録 (POS連携 F7)</legend>
+      <table class="grid" id="tbl-sales">
+        <thead>
+          <tr><th>番号</th><th>日付</th><th>商品コード</th><th>数量</th><th>店舗</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="formrow">
+        <label>商品:</label><select id="sale-sku"></select>
+        <label>数量:</label><input type="text" id="sale-qty" size="6">
+        <label>店舗:</label>
+        <select id="sale-store">
+          <option>上野店</option>
+          <option>川崎店</option>
+          <option>船橋店</option>
+        </select>
+        <button id="btn-sale">売上登録(F8)</button>
+      </div>
+      <div class="msgline" id="msg-retail"></div>
+    </fieldset>
+  </div>
+
+  <div class="statusbar">
+    <span>F1:ヘルプ&nbsp;&nbsp;F2:照会&nbsp;&nbsp;F5:PNR&nbsp;&nbsp;F8:登録&nbsp;&nbsp;F12:終了</span>
+    <span>端末ID: TRM-0042 | 接続先: HOST01(汎用機) | オペレータ: 9001</span>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
