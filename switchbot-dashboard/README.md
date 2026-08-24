@@ -5,7 +5,7 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
 ## Features
 
 - Temperature charts for all SwitchBot Meter devices using Recharts
-- Time scale switching (hour/day/month/year)
+- Time scale switching (hour/day/week/month/year)
 - Auto-refresh every 30 seconds (frontend) with background data collection every 2 minutes (backend)
 - Rate limiting protection with exponential backoff
 - All API calls are cached - GET endpoints never call SwitchBot API directly
@@ -24,9 +24,9 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
    poetry install
    ```
 
-3. Copy `.env.example` to `.env` and add your SwitchBot credentials:
+3. Create `.env` and add your SwitchBot credentials:
    ```bash
-   cp .env.example .env
+   printf 'SWITCHBOT_TOKEN=%s\nSWITCHBOT_SECRET=%s\n' "$SWITCHBOT_TOKEN" "$SWITCHBOT_SECRET" > .env
    ```
    
    Get your credentials from the SwitchBot app:
@@ -34,14 +34,14 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
    - Tap App Version 10 times to enable Developer Options
    - Go to Developer Options > Get Token
 
-4. Start the development server:
+4. Start the backend development server:
    ```bash
-   poetry run fastapi dev app/main.py
+   poetry run fastapi run app/main.py --port 8000
    ```
 
 ### Frontend
 
-1. Navigate to the frontend directory:
+1. Navigate to the frontend directory in a second terminal:
    ```bash
    cd switchbot-frontend
    ```
@@ -51,17 +51,19 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
    npm install
    ```
 
-3. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-
-4. Start the development server:
+3. Start the Vite development server:
    ```bash
    npm run dev
    ```
 
-5. Open http://localhost:5173 in your browser
+4. Open http://localhost:5173 in your browser. Vite proxies `/api` requests to
+   the backend at `http://localhost:8000`.
+
+The frontend is a Vite + React 18 + TypeScript application. `npm run build`
+creates the deployable `dist/` bundle, using Recharts for the history charts.
+The dashboard provides light, dark, high-contrast, and ocean themes; the
+selection follows the system preference on first visit and is persisted in
+local storage.
 
 ## API Endpoints
 
