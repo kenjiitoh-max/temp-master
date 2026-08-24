@@ -10,6 +10,7 @@ export default {
         card: "hsl(var(--card) / <alpha-value>)",
         foreground: "hsl(var(--foreground) / <alpha-value>)",
         muted: "hsl(var(--muted) / <alpha-value>)",
+        "muted-foreground": "hsl(var(--muted-foreground) / <alpha-value>)",
         accent: "hsl(var(--accent) / <alpha-value>)",
         border: "hsl(var(--border) / <alpha-value>)",
         danger: "hsl(var(--danger) / <alpha-value>)",

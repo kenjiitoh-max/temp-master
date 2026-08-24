@@ -14,11 +14,11 @@ function Metric({
   suffix,
   color
 }: {
-  value: number | null;
+  value: number | null | undefined;
   suffix: string;
   color: string;
 }) {
-  if (value === null) return null;
+  if (value == null) return null;
   return (
     <span className={`rounded-md px-2.5 py-1 text-sm font-semibold ${color}`}>
       {value}
