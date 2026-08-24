@@ -22,6 +22,9 @@ function initialTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
+const INITIAL_THEME = initialTheme()
+document.documentElement.dataset.theme = INITIAL_THEME
+
 function readChartColors(): ChartColors {
   const styles = getComputedStyle(document.documentElement)
   return {
@@ -34,7 +37,7 @@ function readChartColors(): ChartColors {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(initialTheme)
+  const [theme, setThemeState] = useState<Theme>(INITIAL_THEME)
   const [chartColors, setChartColors] = useState<ChartColors>(readChartColors)
 
   useEffect(() => {

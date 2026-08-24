@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { API_URL, fetchHistory, fetchMeters, fetchStatus, triggerRefresh } from './api'
 import { ErrorBanner } from './components/ErrorBanner'
 import { MeterCard } from './components/MeterCard'
@@ -17,12 +17,14 @@ export default function App() {
   const [meters, setMeters] = useState<MeterDevice[]>([])
   const [status, setStatus] = useState<StatusResponse | null>(null)
   const [histories, setHistories] = useState<Record<string, MeterReading[]>>({})
+  const historiesRef = useRef(histories)
   const [timeScale, setTimeScale] = useState<TimeScale>('day')
   const [loading, setLoading] = useState(true)
-  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState<Record<string, boolean>>({})
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
+  const [refreshVersion, setRefreshVersion] = useState(0)
 
   const loadData = useCallback(async () => {
     try {
@@ -34,6 +36,7 @@ export default function App() {
       setStatus(statusResponse)
       setError(null)
       setLastRefresh(new Date())
+      setRefreshVersion((version) => version + 1)
     } catch (loadError) {
       setError(`Failed to fetch data: ${loadError instanceof Error ? loadError.message : 'Unknown error'}`)
     } finally {
@@ -53,13 +56,24 @@ export default function App() {
   )
 
   useEffect(() => {
+    historiesRef.current = histories
+  }, [histories])
+
+  useEffect(() => {
     if (!deviceIds) {
       setHistories({})
+      setHistoryLoading({})
       return
     }
     let cancelled = false
-    setHistoryLoading(true)
     const devices = deviceIds.split('|')
+    setHistoryLoading((previous) => {
+      const next = { ...previous }
+      devices.forEach((deviceId) => {
+        next[deviceId] = !Object.prototype.hasOwnProperty.call(historiesRef.current, deviceId)
+      })
+      return next
+    })
 
     Promise.allSettled(devices.map((deviceId) => fetchHistory(deviceId, timeScale)))
       .then((results) => {
@@ -70,16 +84,28 @@ export default function App() {
             nextHistories[devices[index]] = result.value.history
           }
         })
-        setHistories(nextHistories)
+        setHistories((previous) => {
+          const next = { ...previous }
+          Object.assign(next, nextHistories)
+          return next
+        })
       })
       .finally(() => {
-        if (!cancelled) setHistoryLoading(false)
+        if (!cancelled) {
+          setHistoryLoading((previous) => {
+            const next = { ...previous }
+            devices.forEach((deviceId) => {
+              next[deviceId] = false
+            })
+            return next
+          })
+        }
       })
 
     return () => {
       cancelled = true
     }
-  }, [deviceIds, timeScale])
+  }, [deviceIds, refreshVersion, timeScale])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -148,7 +174,7 @@ export default function App() {
                 meter={meter}
                 readings={histories[meter.device_id] ?? []}
                 timeScale={timeScale}
-                historyLoading={historyLoading}
+                historyLoading={historyLoading[meter.device_id] ?? false}
               />
             ))}
           </section>
