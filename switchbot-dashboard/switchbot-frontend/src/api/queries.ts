@@ -38,6 +38,6 @@ export function useRefreshMeters() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: triggerRefresh,
-    onSettled: () => queryClient.invalidateQueries(),
+    onSuccess: () => queryClient.invalidateQueries(),
   })
 }

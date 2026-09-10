@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { openBackup } from './api/client'
 import { useMeters, useRefreshMeters, useStatus } from './api/queries'
 import type { TimeScale } from './api/types'
@@ -15,6 +15,8 @@ export default function App() {
   const metersQuery = useMeters()
   const statusQuery = useStatus()
   const refresh = useRefreshMeters()
+  const refreshRef = useRef(refresh)
+  refreshRef.current = refresh
 
   const meters = metersQuery.data?.meters ?? []
   const status = statusQuery.data
@@ -25,6 +27,8 @@ export default function App() {
   useEffect(() => {
     if (metersQuery.dataUpdatedAt) {
       setLastRefresh(new Date(metersQuery.dataUpdatedAt))
+      // 定期取得が成功したら、前回の手動更新エラー表示を消す
+      if (refreshRef.current.isError) refreshRef.current.reset()
     }
   }, [metersQuery.dataUpdatedAt])
 

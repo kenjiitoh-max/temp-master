@@ -93,11 +93,11 @@ If the frontend is hosted separately from the backend, set `VITE_API_URL`
 - `GET /api/meters/{device_id}/history` - Returns temperature history with time_scale parameter
 - `POST /api/meters/refresh` - Triggers immediate data collection
 - `GET /api/status` - Returns backend status and configuration
-- `GET /api/backup` - Downloads a JSON backup of all devices and readings
+- `GET /api/backup` - Downloads the SQLite database file (`switchbot_backup_<timestamp>.db`)
 
 ## Notes
 
-- Temperature history is stored in memory and resets on backend restart
+- Temperature history is persisted in SQLite (`/data/app.db` in production, local `app.db` otherwise) and survives backend restarts
 - Backend data collection interval: 2 minutes minimum
 - Frontend refresh interval: 30 seconds
 - SwitchBot API has strict rate limits (~10000 requests/day)
