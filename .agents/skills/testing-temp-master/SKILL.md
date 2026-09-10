@@ -19,6 +19,33 @@ description: Test the Temp Master SwitchBot dashboard locally. Use when verifyin
 
 ## Local Development Setup
 
+### Docker alternative (when local Poetry is unavailable)
+
+From `switchbot-dashboard/`, run `docker build -t temp-master-test .`, then
+`docker run -d --name temp-master-e2e -p 8000:8000 temp-master-test`.
+This builds the current frontend and serves it together with the backend at
+`http://localhost:8000/`. Use a disposable container/database for synthetic data;
+do not import test records into a live deployment.
+
+Without SwitchBot credentials, `/api/status` returns `configured: false`.
+The dashboard can still show `Connected`, meaning the local API is reachable,
+not that SwitchBot credentials are valid. `Refresh Data` returns HTTP 500 in
+this mode; do not count this as proof of successful device refresh.
+
+When synthetic data is explicitly authorized, POST a JSON `devices` array to
+`/api/import`. Each device includes `device_id`, `device_name`, `device_type`,
+current values, ISO timestamps and `readings` (timestamp, temperature, humidity,
+optional battery). Include readings both inside and outside the chosen time
+window so changing Time Range visibly changes the chart, not just its labels.
+Real SwitchBot refresh still requires both secrets listed above.
+
+### Japanese font support for browser evidence
+
+If Japanese display-name aliases render as missing-glyph boxes, check
+`fc-list :lang=ja`. On Ubuntu, install `fonts-noto-cjk` (refresh the apt package
+index first if needed), then restart Chrome to pick up the font. This is an
+environment prerequisite, not necessarily an application rendering defect.
+
 ### 1. Install dependencies
 
 ```bash
