@@ -81,6 +81,18 @@ The frontend is served at `http://localhost:8000/` and the API docs at `http://l
 - Status bar: "Monitoring N meters" + "Last refresh: HH:MM:SS"; data re-polls every 30s
 - Theme switcher (`#theme-select` in the navbar): System / Light / Dark / High Contrast / Control Room. Applies `data-theme` on `<html>`, persists to `localStorage["temp-master-theme"]`, and chart colours (line/grid/ticks) follow the theme
 
+### Expected behaviour without credentials
+- `/api/status` returns `configured: false` while the UI still shows `Connected` — the badge only means the local API is reachable, not that SwitchBot auth works.
+- `POST /api/meters/refresh` returning 500 `SwitchBot credentials not configured` is expected; the UI shows a dismissible "Failed to refresh: ..." alert. Do not report the real-device refresh path as verified.
+- Re-running `/api/import` appends duplicate readings; reuse an already-seeded DB where possible.
+
+### Browser verification tips
+- Emulate OS light/dark (DevTools Rendering or CDP `Emulation.setEmulatedMedia`) to check the `System` theme option and the initial theme on reload.
+- Wait at least one 30s poll; in the Network log `/api/meters` and `/api/status` fire together, followed by one `/history` request per meter.
+- Use browser Offline emulation to test `Disconnected` (cards stay visible) and automatic recovery on the next poll.
+- Add network throttling if "Refreshing..." is too fast to observe.
+- For Download Backup, open the downloaded SQLite read-only and check `PRAGMA integrity_check` and the devices count.
+
 ## Running Backend Tests
 
 ```bash
