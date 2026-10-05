@@ -1,0 +1,201 @@
+/*
+ * Colour tokens per theme. The active theme is selected via
+ * <html data-theme="..."> (set by ThemeProvider and the inline script in index.html).
+ * Chart colours (--chart-*) are read in JS by theme/chartPalette.ts.
+ */
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+  --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  --radius: 10px;
+  --border-width: 1px;
+
+  --color-bg: #f3f5f9;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f8fafc;
+  --color-border: #dfe4ec;
+  --color-text: #1f2937;
+  --color-text-muted: #6b7280;
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4ed8;
+  --color-accent-contrast: #ffffff;
+  --color-shadow: rgba(15, 23, 42, 0.06);
+
+  --color-nav-bg: #ffffff;
+  --color-nav-text: #111827;
+
+  --color-success: #16a34a;
+  --color-danger: #dc2626;
+
+  --stat-temp-bg: #fde8e8;
+  --stat-temp-text: #b42318;
+  --stat-humidity-bg: #e0f2fe;
+  --stat-humidity-text: #0369a1;
+  --stat-battery-bg: #dcfce7;
+  --stat-battery-text: #15803d;
+
+  --alert-info-bg: #eff6ff;
+  --alert-info-border: #bfdbfe;
+  --alert-info-text: #1e40af;
+  --alert-warning-bg: #fffbeb;
+  --alert-warning-border: #fde68a;
+  --alert-warning-text: #92400e;
+  --alert-danger-bg: #fef2f2;
+  --alert-danger-border: #fecaca;
+  --alert-danger-text: #991b1b;
+
+  --chart-line: #d9534f;
+  --chart-fill: rgba(217, 83, 79, 0.15);
+  --chart-point-hover: #5bc0de;
+  --chart-grid: rgba(0, 0, 0, 0.06);
+  --chart-tick: #6b7280;
+  --chart-tooltip-bg: rgba(17, 24, 39, 0.92);
+  --chart-tooltip-text: #ffffff;
+  --chart-tooltip-border: rgba(17, 24, 39, 0.92);
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: #0d1117;
+  --color-surface: #161b22;
+  --color-surface-alt: #1c232d;
+  --color-border: #2a3441;
+  --color-text: #e6edf3;
+  --color-text-muted: #8b98a8;
+  --color-accent: #58a6ff;
+  --color-accent-hover: #79b8ff;
+  --color-accent-contrast: #0d1117;
+  --color-shadow: rgba(0, 0, 0, 0.4);
+
+  --color-nav-bg: #010409;
+  --color-nav-text: #e6edf3;
+
+  --color-success: #3fb950;
+  --color-danger: #f85149;
+
+  --stat-temp-bg: rgba(248, 81, 73, 0.16);
+  --stat-temp-text: #ff8b84;
+  --stat-humidity-bg: rgba(56, 189, 248, 0.16);
+  --stat-humidity-text: #7dd3fc;
+  --stat-battery-bg: rgba(63, 185, 80, 0.16);
+  --stat-battery-text: #7ee787;
+
+  --alert-info-bg: rgba(56, 139, 253, 0.12);
+  --alert-info-border: rgba(56, 139, 253, 0.4);
+  --alert-info-text: #a5c8ff;
+  --alert-warning-bg: rgba(210, 153, 34, 0.14);
+  --alert-warning-border: rgba(210, 153, 34, 0.45);
+  --alert-warning-text: #f2cc60;
+  --alert-danger-bg: rgba(248, 81, 73, 0.12);
+  --alert-danger-border: rgba(248, 81, 73, 0.45);
+  --alert-danger-text: #ffa198;
+
+  --chart-line: #ff7b72;
+  --chart-fill: rgba(255, 123, 114, 0.18);
+  --chart-point-hover: #58a6ff;
+  --chart-grid: rgba(255, 255, 255, 0.08);
+  --chart-tick: #8b98a8;
+  --chart-tooltip-bg: #0d1117;
+  --chart-tooltip-text: #e6edf3;
+  --chart-tooltip-border: #30363d;
+}
+
+[data-theme='high-contrast'] {
+  color-scheme: dark;
+  --radius: 0;
+  --border-width: 2px;
+
+  --color-bg: #000000;
+  --color-surface: #000000;
+  --color-surface-alt: #000000;
+  --color-border: #ffffff;
+  --color-text: #ffffff;
+  --color-text-muted: #ffffff;
+  --color-accent: #ffff00;
+  --color-accent-hover: #ffffff;
+  --color-accent-contrast: #000000;
+  --color-shadow: transparent;
+
+  --color-nav-bg: #000000;
+  --color-nav-text: #ffffff;
+
+  --color-success: #00ff00;
+  --color-danger: #ff4040;
+
+  --stat-temp-bg: #ff4040;
+  --stat-temp-text: #000000;
+  --stat-humidity-bg: #00ffff;
+  --stat-humidity-text: #000000;
+  --stat-battery-bg: #00ff00;
+  --stat-battery-text: #000000;
+
+  --alert-info-bg: #000000;
+  --alert-info-border: #00ffff;
+  --alert-info-text: #00ffff;
+  --alert-warning-bg: #000000;
+  --alert-warning-border: #ffff00;
+  --alert-warning-text: #ffff00;
+  --alert-danger-bg: #000000;
+  --alert-danger-border: #ff4040;
+  --alert-danger-text: #ff4040;
+
+  --chart-line: #ffff00;
+  --chart-fill: rgba(255, 255, 0, 0.14);
+  --chart-point-hover: #00ffff;
+  --chart-grid: rgba(255, 255, 255, 0.35);
+  --chart-tick: #ffffff;
+  --chart-tooltip-bg: #000000;
+  --chart-tooltip-text: #ffffff;
+  --chart-tooltip-border: #ffffff;
+}
+
+/* Industrial SCADA-style amber-on-black control panel. */
+[data-theme='control-room'] {
+  color-scheme: dark;
+  --font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  --radius: 2px;
+
+  --color-bg: #0b0f0c;
+  --color-surface: #111813;
+  --color-surface-alt: #16201a;
+  --color-border: #2b3a2f;
+  --color-text: #ffc861;
+  --color-text-muted: #9a8a5c;
+  --color-accent: #ffb000;
+  --color-accent-hover: #ffc84a;
+  --color-accent-contrast: #0b0f0c;
+  --color-shadow: rgba(255, 176, 0, 0.06);
+
+  --color-nav-bg: #050806;
+  --color-nav-text: #ffb000;
+
+  --color-success: #39ff88;
+  --color-danger: #ff5b3a;
+
+  --stat-temp-bg: rgba(255, 91, 58, 0.15);
+  --stat-temp-text: #ff8a6b;
+  --stat-humidity-bg: rgba(0, 224, 255, 0.12);
+  --stat-humidity-text: #5fe6ff;
+  --stat-battery-bg: rgba(57, 255, 136, 0.12);
+  --stat-battery-text: #39ff88;
+
+  --alert-info-bg: rgba(57, 255, 136, 0.06);
+  --alert-info-border: rgba(57, 255, 136, 0.35);
+  --alert-info-text: #39ff88;
+  --alert-warning-bg: rgba(255, 176, 0, 0.1);
+  --alert-warning-border: #ffb000;
+  --alert-warning-text: #ffb000;
+  --alert-danger-bg: rgba(255, 91, 58, 0.1);
+  --alert-danger-border: #ff5b3a;
+  --alert-danger-text: #ff8a6b;
+
+  --chart-line: #39ff88;
+  --chart-fill: rgba(57, 255, 136, 0.1);
+  --chart-point-hover: #ffb000;
+  --chart-grid: rgba(57, 255, 136, 0.12);
+  --chart-tick: #9a8a5c;
+  --chart-tooltip-bg: #050806;
+  --chart-tooltip-text: #ffb000;
+  --chart-tooltip-border: #ffb000;
+}
