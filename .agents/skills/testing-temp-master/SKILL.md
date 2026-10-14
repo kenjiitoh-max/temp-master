@@ -16,6 +16,8 @@ description: Test the Temp Master SwitchBot dashboard locally. Use when verifyin
 - `SWITCHBOT_TOKEN` - SwitchBot API token
 - `SWITCHBOT_SECRET` - SwitchBot API secret
 
+Both are only required for live SwitchBot collection and real upstream rate-limit behavior. Do not claim those flows were verified by importing fixtures.
+
 ## Local Development Setup
 
 ### 1. Install dependencies
@@ -49,6 +51,15 @@ Alternatively run the Vite dev server (`npm run dev` in `switchbot-frontend/`, p
 ### Dummy data (no SwitchBot credentials)
 
 Without credentials, seed meters via `POST /api/import` (`{"devices": [{device_id, device_name, device_type, current_temperature, current_humidity, battery, last_updated, readings: [{timestamp, temperature, humidity, battery}]}]}`). Use names from `DISPLAY_NAMES` in `src/constants.ts` (e.g. `Bedroom Meter`) to check the alias mapping. `POST /api/meters/refresh` returns 500 without credentials, so the UI shows "Failed to refresh: 500 SwitchBot credentials not configured".
+
+## Credential-free local UI testing
+
+- Launch the backend with `DB_PATH=/tmp/temp-master-test.db` to isolate fixtures. If Poetry was installed with `pip install --user`, use `~/.local/bin/poetry`.
+- `Connected` means the local meters/status APIs responded; it does not mean SwitchBot is configured. Without credentials `/api/status.configured` is false while the UI can still show Connected with imported devices.
+- `/api/import` writes real SQLite data. Include current UTC timestamps, readings inside the last hour, and older readings for week/month/year; stale fixtures give `No history data` for short ranges.
+- Stop and restart the backend process (not just the Vite dev server) to test Disconnected and recovery.
+- A local refresh failure can finish too fast to see `Refreshing...`. CDP network latency emulation slows the real response without replacing the payload; restore latency afterward.
+- Download Backup opens a new browsing context that Chrome closes once the attachment starts. When attached via CDP, a helper's saved download may not be the real file; validate the file in Downloads with SQLite `PRAGMA integrity_check` and expected row counts.
 
 ### 4. Start the server
 
