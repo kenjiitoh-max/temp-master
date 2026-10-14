@@ -1,0 +1,165 @@
+@import 'tailwindcss';
+
+/* dark: バリアントを data-theme に連動させる (dark / neon / contrast は暗い系) */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *, [data-theme='neon'], [data-theme='neon'] *, [data-theme='contrast'], [data-theme='contrast'] *));
+
+/* ---------- テーマごとの CSS 変数 ---------- */
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+  --background: #f4f6f9;
+  --background-image: none;
+  --surface: #ffffff;
+  --surface-muted: #f1f4f8;
+  --border: #e2e7ee;
+  --foreground: #0f172a;
+  --muted-foreground: #64748b;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --temp: #dc2626;
+  --humidity: #0284c7;
+  --battery: #16a34a;
+  --info: #0369a1;
+  --success: #15803d;
+  --warning: #b45309;
+  --danger: #b91c1c;
+  --ring: #93c5fd;
+
+  --chart-line: #dc2626;
+  --chart-grid: rgba(15, 23, 42, 0.08);
+  --chart-axis: #64748b;
+  --chart-active-dot: #0ea5e9;
+  --chart-tooltip-bg: #ffffff;
+  --chart-tooltip-fg: #0f172a;
+  --chart-tooltip-border: #e2e7ee;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --background: #0b1120;
+  --background-image: none;
+  --surface: #111827;
+  --surface-muted: #1a2333;
+  --border: #263247;
+  --foreground: #e5e7eb;
+  --muted-foreground: #94a3b8;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --temp: #f87171;
+  --humidity: #38bdf8;
+  --battery: #4ade80;
+  --info: #38bdf8;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --ring: #1d4ed8;
+
+  --chart-line: #f87171;
+  --chart-grid: rgba(255, 255, 255, 0.08);
+  --chart-axis: #94a3b8;
+  --chart-active-dot: #38bdf8;
+  --chart-tooltip-bg: #1a2333;
+  --chart-tooltip-fg: #e5e7eb;
+  --chart-tooltip-border: #263247;
+}
+
+[data-theme='contrast'] {
+  color-scheme: dark;
+  --background: #000000;
+  --background-image: none;
+  --surface: #000000;
+  --surface-muted: #141414;
+  --border: #ffffff;
+  --foreground: #ffffff;
+  --muted-foreground: #e5e5e5;
+  --primary: #ffff00;
+  --primary-foreground: #000000;
+  --temp: #ff6b6b;
+  --humidity: #00ffff;
+  --battery: #00ff00;
+  --info: #00ffff;
+  --success: #00ff00;
+  --warning: #ffff00;
+  --danger: #ff6b6b;
+  --ring: #ffff00;
+
+  --chart-line: #ffff00;
+  --chart-grid: rgba(255, 255, 255, 0.35);
+  --chart-axis: #ffffff;
+  --chart-active-dot: #00ffff;
+  --chart-tooltip-bg: #000000;
+  --chart-tooltip-fg: #ffffff;
+  --chart-tooltip-border: #ffffff;
+}
+
+[data-theme='neon'] {
+  color-scheme: dark;
+  --background: #0d0221;
+  --background-image:
+    radial-gradient(1200px 600px at 10% -10%, rgba(255, 43, 214, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 110% 10%, rgba(34, 229, 255, 0.14), transparent 60%);
+  --surface: #170a36;
+  --surface-muted: #22124d;
+  --border: #3d2a7a;
+  --foreground: #f5f3ff;
+  --muted-foreground: #b8a9e6;
+  --primary: #ff2bd6;
+  --primary-foreground: #ffffff;
+  --temp: #ff4d8d;
+  --humidity: #22e5ff;
+  --battery: #a3ff12;
+  --info: #22e5ff;
+  --success: #a3ff12;
+  --warning: #ffd166;
+  --danger: #ff4d6d;
+  --ring: #ff2bd6;
+
+  --chart-line: #22e5ff;
+  --chart-grid: rgba(184, 169, 230, 0.15);
+  --chart-axis: #b8a9e6;
+  --chart-active-dot: #ff2bd6;
+  --chart-tooltip-bg: #22124d;
+  --chart-tooltip-fg: #f5f3ff;
+  --chart-tooltip-border: #ff2bd6;
+}
+
+/* ---------- Tailwind のユーティリティ (bg-surface, text-temp など) に変数を割り当て ---------- */
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-temp: var(--temp);
+  --color-humidity: var(--humidity);
+  --color-battery: var(--battery);
+  --color-info: var(--info);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    background-image: var(--background-image);
+    background-attachment: fixed;
+    color: var(--foreground);
+    font-family:
+      ui-sans-serif, system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
+  }
+}
