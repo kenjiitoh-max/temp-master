@@ -41,6 +41,10 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
 
 ### Frontend
 
+The frontend is a Vite + React 18 + TypeScript app in `switchbot-frontend/`
+(TanStack Query for data fetching, Tailwind CSS for styling, Recharts for charts).
+Requires Node.js 20.19+ (Node 22 recommended; the Docker build uses Node 22).
+
 1. Navigate to the frontend directory:
    ```bash
    cd switchbot-frontend
@@ -51,17 +55,48 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
    npm install
    ```
 
-3. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-
-4. Start the development server:
+3. Start the development server (start the backend on port 8000 first):
    ```bash
    npm run dev
    ```
+   Open http://localhost:5173. The Vite dev server proxies `/api` to `http://localhost:8000`
+   (`server.proxy` in `vite.config.ts`), so no CORS setup or hard-coded backend URL is needed.
 
-5. Open http://localhost:5173 in your browser
+4. Build for production:
+   ```bash
+   npm run build
+   ```
+   Output goes to `switchbot-frontend/dist/`. The Dockerfile builds it in a Node 22 stage and copies
+   `dist/` into the backend image as `static/`, which FastAPI serves at `/`.
+
+Other scripts: `npm run lint`, `npm run typecheck`, `npm test` (Vitest), `npm run format` (Prettier).
+
+#### Environment variables (optional)
+
+Copy `.env.example` to `.env` to override defaults:
+
+- `VITE_API_BASE_URL` – API base URL. Empty by default, so the app calls same-origin relative paths
+  (`/api/...`), which is what production uses.
+- `VITE_DEV_PROXY_TARGET` – backend the dev server proxies `/api` to (default `http://localhost:8000`).
+
+#### Themes
+
+Use the **Theme** dropdown in the header to switch between:
+
+- `light` – Light
+- `dark` – Dark
+- `contrast` – High Contrast (black background, yellow/white accents)
+- `wa` – 和 (Ai & Shu): traditional Japanese indigo (藍色) and vermilion (朱色) on unbleached (生成り)
+
+The choice is saved in `localStorage` (`temp-master-theme`). Before any choice is saved, the
+initial theme follows the OS `prefers-color-scheme` setting. Themes are CSS custom properties
+switched by `<html data-theme="...">` (see `src/index.css`); Tailwind utilities such as
+`bg-surface` or `text-muted` read those variables, so adding a theme only needs a new
+`[data-theme='...']` block in `index.css` and an entry in `src/lib/theme.ts` (plus the list in
+the inline script of `index.html`, which applies the theme before React loads).
+
+The previous jQuery/Bootstrap single-file frontend is kept for reference in
+`switchbot-frontend-legacy/index.html`; it is not used by the build.
 
 ## API Endpoints
 

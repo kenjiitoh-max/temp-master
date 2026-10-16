@@ -1,0 +1,159 @@
+@import 'tailwindcss';
+
+/*
+ * Themes are plain CSS custom properties switched by <html data-theme="...">.
+ * `@theme inline` maps them to Tailwind utilities (bg-surface, text-muted, ...),
+ * so components never hard-code colors.
+ */
+@theme inline {
+  --color-bg: var(--tm-bg);
+  --color-surface: var(--tm-surface);
+  --color-surface-muted: var(--tm-surface-muted);
+  --color-border: var(--tm-border);
+  --color-fg: var(--tm-fg);
+  --color-muted: var(--tm-muted);
+  --color-primary: var(--tm-primary);
+  --color-primary-fg: var(--tm-primary-fg);
+  --color-temp: var(--tm-temp);
+  --color-humidity: var(--tm-humidity);
+  --color-battery: var(--tm-battery);
+  --color-badge-fg: var(--tm-badge-fg);
+  --color-success: var(--tm-success);
+  --color-danger: var(--tm-danger);
+  --color-info-bg: var(--tm-info-bg);
+  --color-info-fg: var(--tm-info-fg);
+  --color-warning-bg: var(--tm-warning-bg);
+  --color-warning-fg: var(--tm-warning-fg);
+  --color-danger-bg: var(--tm-danger-bg);
+  --color-danger-fg: var(--tm-danger-fg);
+}
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+  --tm-bg: #f5f5f5;
+  --tm-surface: #ffffff;
+  --tm-surface-muted: #f8f8f8;
+  --tm-border: #dddddd;
+  --tm-fg: #333333;
+  --tm-muted: #777777;
+  --tm-primary: #337ab7;
+  --tm-primary-fg: #ffffff;
+  --tm-temp: #d9534f;
+  --tm-humidity: #31b0d5;
+  --tm-battery: #449d44;
+  --tm-badge-fg: #ffffff;
+  --tm-success: #3c9a3c;
+  --tm-danger: #c9302c;
+  --tm-info-bg: #d9edf7;
+  --tm-info-fg: #31708f;
+  --tm-warning-bg: #fcf8e3;
+  --tm-warning-fg: #8a6d3b;
+  --tm-danger-bg: #f2dede;
+  --tm-danger-fg: #a94442;
+  --tm-chart-line: #d9534f;
+  --tm-chart-grid: rgba(0, 0, 0, 0.06);
+  --tm-chart-tick: #777777;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --tm-bg: #0f172a;
+  --tm-surface: #1e293b;
+  --tm-surface-muted: #273449;
+  --tm-border: #334155;
+  --tm-fg: #e2e8f0;
+  --tm-muted: #94a3b8;
+  --tm-primary: #3b82f6;
+  --tm-primary-fg: #ffffff;
+  --tm-temp: #ef4444;
+  --tm-humidity: #0ea5e9;
+  --tm-battery: #16a34a;
+  --tm-badge-fg: #ffffff;
+  --tm-success: #22c55e;
+  --tm-danger: #f87171;
+  --tm-info-bg: #172554;
+  --tm-info-fg: #bfdbfe;
+  --tm-warning-bg: #422006;
+  --tm-warning-fg: #fde68a;
+  --tm-danger-bg: #450a0a;
+  --tm-danger-fg: #fecaca;
+  --tm-chart-line: #f87171;
+  --tm-chart-grid: rgba(255, 255, 255, 0.08);
+  --tm-chart-tick: #94a3b8;
+}
+
+[data-theme='contrast'] {
+  color-scheme: dark;
+  --tm-bg: #000000;
+  --tm-surface: #000000;
+  --tm-surface-muted: #111111;
+  --tm-border: #ffffff;
+  --tm-fg: #ffffff;
+  --tm-muted: #e5e5e5;
+  --tm-primary: #ffff00;
+  --tm-primary-fg: #000000;
+  --tm-temp: #ff6b6b;
+  --tm-humidity: #00e5ff;
+  --tm-battery: #00ff66;
+  --tm-badge-fg: #000000;
+  --tm-success: #00ff66;
+  --tm-danger: #ff4d4d;
+  --tm-info-bg: #000000;
+  --tm-info-fg: #00e5ff;
+  --tm-warning-bg: #000000;
+  --tm-warning-fg: #ffff00;
+  --tm-danger-bg: #000000;
+  --tm-danger-fg: #ff4d4d;
+  --tm-chart-line: #ffff00;
+  --tm-chart-grid: rgba(255, 255, 255, 0.35);
+  --tm-chart-tick: #ffffff;
+}
+
+/* 和 (Wa): 藍色 (indigo) / 朱色 (vermilion) / 生成り (unbleached) / 若竹色 (bamboo) */
+[data-theme='wa'] {
+  color-scheme: light;
+  --tm-bg: #f3efe4;
+  --tm-surface: #fbf8f0;
+  --tm-surface-muted: #ece5d3;
+  --tm-border: #d6cbb3;
+  --tm-fg: #2b2b2b;
+  --tm-muted: #6b6152;
+  --tm-primary: #165e83;
+  --tm-primary-fg: #fbf8f0;
+  --tm-temp: #c53d43;
+  --tm-humidity: #2a83a2;
+  --tm-battery: #4d8a5b;
+  --tm-badge-fg: #fbf8f0;
+  --tm-success: #4d8a5b;
+  --tm-danger: #c53d43;
+  --tm-info-bg: #e3ecef;
+  --tm-info-fg: #165e83;
+  --tm-warning-bg: #f6ead0;
+  --tm-warning-fg: #7b5a1e;
+  --tm-danger-bg: #f4dcd8;
+  --tm-danger-fg: #9e2a2f;
+  --tm-chart-line: #c53d43;
+  --tm-chart-grid: rgba(22, 94, 131, 0.12);
+  --tm-chart-tick: #6b6152;
+}
+
+body {
+  background-color: var(--tm-bg);
+  color: var(--tm-fg);
+}
+
+/* Recharts renders SVG; style its parts with the theme variables. */
+.tm-chart {
+  color: var(--tm-chart-line);
+}
+.tm-chart .recharts-cartesian-grid line {
+  stroke: var(--tm-chart-grid);
+}
+.tm-chart .recharts-cartesian-axis-tick-value {
+  fill: var(--tm-chart-tick);
+}
+.tm-chart .recharts-cartesian-axis-line,
+.tm-chart .recharts-cartesian-axis-tick-line {
+  stroke: var(--tm-chart-grid);
+}

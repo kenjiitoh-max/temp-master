@@ -1,0 +1,8 @@
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/.venv
+**/*.db
+**/.env
+switchbot-frontend/dist
+switchbot-frontend-legacy
