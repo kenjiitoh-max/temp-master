@@ -33,15 +33,20 @@ echo "SWITCHBOT_TOKEN=${SWITCHBOT_TOKEN}" > .env
 echo "SWITCHBOT_SECRET=${SWITCHBOT_SECRET}" >> .env
 ```
 
-### 3. Symlink frontend static files
+### 3. Build the frontend and symlink `dist/` as static files
 
-The Dockerfile copies `switchbot-frontend/` to `switchbot-backend/static/`, but locally this directory doesn't exist. You must create a symlink:
+The frontend is a Vite + React app. The Dockerfile builds it in a Node 22 stage and copies `switchbot-frontend/dist/` to the backend's `static/`. Locally, build it and symlink `dist/`:
 
 ```bash
-ln -s $(pwd)/switchbot-dashboard/switchbot-frontend switchbot-dashboard/switchbot-backend/static
+cd switchbot-dashboard/switchbot-frontend && npm ci && npm run build && cd -
+ln -sfn $(pwd)/switchbot-dashboard/switchbot-frontend/dist switchbot-dashboard/switchbot-backend/static
 ```
 
-**Important:** The static directory check in `main.py` happens at module import time (`STATIC_DIR = Path(__file__).resolve().parent.parent / "static"`). If you create the symlink after starting the server, you must restart the server.
+**Important:** The static directory check in `main.py` happens at module import time (`STATIC_DIR = Path(__file__).resolve().parent.parent / "static"`). If you create the symlink after starting the server, you must restart the server. Rebuilding `dist/` does not need a restart.
+
+For hot reload instead, run `npm run dev` in `switchbot-frontend/` (port 5173); it proxies `/api` to `http://localhost:8000`.
+
+Without SwitchBot credentials, seed dummy meters with `POST /api/import` and start the backend with `DB_PATH=/tmp/<name>.db`. `POST /api/meters/refresh` then returns 500 "SwitchBot credentials not configured" (expected), and the rate-limit warning cannot be triggered.
 
 ### 4. Start the server
 
@@ -57,19 +62,20 @@ The frontend is served at `http://localhost:8000/` and the API docs at `http://l
 ### Branding Verification
 - Page title (`<title>` tag): should say "Temp Master Dashboard"
 - Navbar brand: should say "Temp Master Dashboard"
-- Footer: should say "Temp Master Dashboard v1.0 - Built with jQuery + Bootstrap 3"
+- Footer: should say "Temp Master Dashboard v2.0 - Built with React + TanStack Query + Tailwind CSS"
 - Verify no "Snake" or "SnakeRoom" text exists anywhere: `document.body.innerHTML.includes('Snake')` should be `false`
 
 ### API Connectivity
 - `GET /api/status` returns `configured: true` and `meters_count` > 0
 - `GET /api/meters` returns live meter data with temperature, humidity, battery
-- Connection status badge shows "Connected" (green, class `label-success`)
+- Connection status badge in the header shows "Connected" (green, `data-state="connected"`)
 
 ### UI Functionality
-- View toggle: Default (equal 3-col grid) vs Shelf (featured meter + 3-col grid)
+- Theme dropdown in the header: Light / Dark / High Contrast / 和 (Ai & Shu). Sets `<html data-theme>`, persists in `localStorage` key `temp-master-theme`, initial value follows `prefers-color-scheme`
 - Time Range selector: Last Hour / Last 24 Hours / Last 7 Days / Last 30 Days / Last Year
-- Charts: Canvas elements rendered with Chart.js line charts
-- Refresh Data button triggers data reload
+- Charts: Recharts SVG area charts (`.tm-chart svg`), updated in place when data changes
+- Refresh Data button in the header calls `POST /api/meters/refresh`, then refetches meters/status/history
+- Data auto-refreshes every 30 seconds (TanStack Query `refetchInterval`)
 
 ## Running Backend Tests
 
@@ -83,6 +89,6 @@ Expected: 97 tests pass.
 ## Architecture Notes
 
 - Backend: FastAPI + aiosqlite (SQLite persistence at `/data/app.db` or local `app.db`)
-- Frontend: jQuery + Bootstrap 3 (single `index.html` file)
+- Frontend: Vite + React 18 + TypeScript, TanStack Query, Tailwind CSS v4, Recharts (`switchbot-frontend/`); legacy jQuery version kept in `switchbot-frontend-legacy/`
 - Deployment: Fly.io (see `fly.toml`)
 - Background data collection runs with 120s interval, with rate limiting and exponential backoff
