@@ -544,8 +544,42 @@
         });
       });
 
+      // バックアップは BACKUP_TOKEN による認証が必須のため、window.open ではヘッダを付けられない。
+      // トークンを入力してもらい、fetch + Blob でダウンロードする（トークンはページ内メモリにのみ保持）。
+      var backupToken = '';
       $('#btn-backup').click(function() {
-        window.open(API_URL + '/api/backup', '_blank');
+        var $btn = $(this);
+        if (!backupToken) {
+          var input = window.prompt('Backup token (BACKUP_TOKEN):');
+          if (!input) { return; }
+          backupToken = input.trim();
+        }
+        $btn.prop('disabled', true).text('Downloading...');
+        fetch(API_URL + '/api/backup', {
+          headers: { 'Authorization': 'Bearer ' + backupToken }
+        }).then(function(res) {
+          if (res.status === 401) { backupToken = ''; throw new Error('Invalid backup token'); }
+          if (res.status === 404) { throw new Error('Backup is disabled on the server (BACKUP_TOKEN not set)'); }
+          if (!res.ok) { throw new Error('HTTP ' + res.status); }
+          var disposition = res.headers.get('Content-Disposition') || '';
+          var match = disposition.match(/filename="?([^";]+)"?/);
+          var filename = match ? match[1] : 'switchbot_backup.db';
+          return res.blob().then(function(blob) {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          });
+        }).catch(function(err) {
+          // showError は接続状態を Disconnected にしてしまうので、バックアップ失敗は alert で通知する
+          window.alert('Backup failed: ' + err.message);
+        }).then(function() {
+          $btn.prop('disabled', false).text('Download Backup');
+        });
       });
     });
   </script>
