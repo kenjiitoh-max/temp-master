@@ -52,15 +52,17 @@ export function useDashboardData(): DashboardData {
 
   const refresh = useCallback(async () => {
     setRefreshing(true)
+    let refreshError: string | null = null
     try {
       await triggerRefresh()
     } catch (err: unknown) {
-      if (mounted.current) {
-        setError(`Failed to refresh: ${err instanceof Error ? err.message : String(err)}`)
-      }
+      refreshError = `Failed to refresh: ${err instanceof Error ? err.message : String(err)}`
     }
+    // reload() は成功時に error を消すので、Refresh の失敗はその後に表示し直す
     await reload()
-    if (mounted.current) setRefreshing(false)
+    if (!mounted.current) return
+    if (refreshError) setError(refreshError)
+    setRefreshing(false)
   }, [reload])
 
   useEffect(() => {
