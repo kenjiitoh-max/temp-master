@@ -4,7 +4,8 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
 
 ## Features
 
-- Temperature charts for all SwitchBot Meter devices using Recharts
+- Temperature charts for all SwitchBot Meter devices using Recharts (React + TypeScript + Vite + Tailwind CSS)
+- Light / Dark / Control Room themes (persisted, follows OS preference by default)
 - Time scale switching (hour/day/month/year)
 - Auto-refresh every 30 seconds (frontend) with background data collection every 2 minutes (backend)
 - Rate limiting protection with exponential backoff
@@ -51,10 +52,11 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
    npm install
    ```
 
-3. Copy `.env.example` to `.env`:
+3. (Optional) Copy `.env.example` to `.env` if the API runs on another origin:
    ```bash
    cp .env.example .env
    ```
+   By default `npm run dev` proxies `/api` to `http://localhost:8000`.
 
 4. Start the development server:
    ```bash
@@ -62,6 +64,14 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
    ```
 
 5. Open http://localhost:5173 in your browser
+
+6. Switch themes (Light / Dark / Control Room / System) from the dropdown in the header.
+   The choice is saved in `localStorage` and defaults to the OS `prefers-color-scheme`.
+
+### Production build
+
+The `Dockerfile` builds the frontend (`npm ci && npm run build`) in a multi-stage build and
+copies `dist/` into the backend image as `static/`, which FastAPI serves at `/`.
 
 ## API Endpoints
 

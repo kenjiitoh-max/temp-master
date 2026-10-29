@@ -33,43 +33,56 @@ echo "SWITCHBOT_TOKEN=${SWITCHBOT_TOKEN}" > .env
 echo "SWITCHBOT_SECRET=${SWITCHBOT_SECRET}" >> .env
 ```
 
-### 3. Symlink frontend static files
-
-The Dockerfile copies `switchbot-frontend/` to `switchbot-backend/static/`, but locally this directory doesn't exist. You must create a symlink:
-
-```bash
-ln -s $(pwd)/switchbot-dashboard/switchbot-frontend switchbot-dashboard/switchbot-backend/static
-```
-
-**Important:** The static directory check in `main.py` happens at module import time (`STATIC_DIR = Path(__file__).resolve().parent.parent / "static"`). If you create the symlink after starting the server, you must restart the server.
-
-### 4. Start the server
+### 3. Start the backend
 
 ```bash
 cd switchbot-dashboard/switchbot-backend
 poetry run fastapi run app/main.py --host 0.0.0.0 --port 8000
 ```
 
-The frontend is served at `http://localhost:8000/` and the API docs at `http://localhost:8000/docs`.
+API docs at `http://localhost:8000/docs`.
+
+### 4. Start the frontend (Vite dev server)
+
+```bash
+cd switchbot-dashboard/switchbot-frontend
+npm install
+npm run dev -- --host 0.0.0.0
+```
+
+The dashboard is at `http://localhost:5173/`. `vite.config.ts` proxies `/api/*` to `http://localhost:8000`, so no CORS / env setup is needed.
+
+### 4b. (Optional) Test the production build the way Docker serves it
+
+The Dockerfile builds `switchbot-frontend/dist/` and copies it to `switchbot-backend/static/`. Locally:
+
+```bash
+(cd switchbot-dashboard/switchbot-frontend && npm run build)
+ln -s $(pwd)/switchbot-dashboard/switchbot-frontend/dist switchbot-dashboard/switchbot-backend/static
+```
+
+**Important:** The static directory check in `main.py` happens at module import time (`STATIC_DIR = Path(__file__).resolve().parent.parent / "static"`). Restart the backend after creating the symlink, and remove the symlink afterwards (it must not be committed).
 
 ## Key Test Points
 
 ### Branding Verification
 - Page title (`<title>` tag): should say "Temp Master Dashboard"
 - Navbar brand: should say "Temp Master Dashboard"
-- Footer: should say "Temp Master Dashboard v1.0 - Built with jQuery + Bootstrap 3"
+- Footer: should say "Temp Master Dashboard v2.0 - Built with React + TypeScript + Vite + Tailwind CSS"
 - Verify no "Snake" or "SnakeRoom" text exists anywhere: `document.body.innerHTML.includes('Snake')` should be `false`
 
 ### API Connectivity
 - `GET /api/status` returns `configured: true` and `meters_count` > 0
 - `GET /api/meters` returns live meter data with temperature, humidity, battery
-- Connection status badge shows "Connected" (green, class `label-success`)
+- Connection status badge (`#connection-status`) shows "Connected" (green)
 
 ### UI Functionality
-- View toggle: Default (equal 3-col grid) vs Shelf (featured meter + 3-col grid)
-- Time Range selector: Last Hour / Last 24 Hours / Last 7 Days / Last 30 Days / Last Year
-- Charts: Canvas elements rendered with Chart.js line charts
-- Refresh Data button triggers data reload
+- Time Range selector (`#time-scale-select`): Last Hour / Last 24 Hours / Last 7 Days / Last 30 Days / Last Year — charts refetch `/api/meters/{id}/history?time_scale=...`
+- Charts: Recharts SVG area charts inside each `[data-device-id]` card
+- Refresh Data button (`#btn-refresh`) POSTs `/api/meters/refresh` then reloads (fails with 500 when credentials are not configured — expected)
+- Theme switcher (`[data-testid="theme-select"]` in the header): System (auto) / Light / Dark / Control Room
+  - Changing it updates `document.documentElement.dataset.theme` and `localStorage['temp-master-theme']` immediately
+  - Selection survives reload; "System (auto)" follows `prefers-color-scheme`
 
 ## Running Backend Tests
 
@@ -83,6 +96,7 @@ Expected: 97 tests pass.
 ## Architecture Notes
 
 - Backend: FastAPI + aiosqlite (SQLite persistence at `/data/app.db` or local `app.db`)
-- Frontend: jQuery + Bootstrap 3 (single `index.html` file)
+- Frontend: Vite + React 19 + TypeScript + Tailwind CSS v4 + Recharts (`switchbot-frontend/src/`); legacy jQuery version kept at `switchbot-frontend/legacy/index.html` for reference only
+- Themes: CSS variables in `src/themes/themes.css`, state in `src/context/ThemeContext.tsx`
 - Deployment: Fly.io (see `fly.toml`)
 - Background data collection runs with 120s interval, with rate limiting and exponential backoff
