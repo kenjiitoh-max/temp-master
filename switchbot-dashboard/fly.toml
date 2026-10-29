@@ -1,3 +1,6 @@
+# Fly.io デプロイ設定（Temp Master Dashboard）
+# シークレット（SWITCHBOT_TOKEN / SWITCHBOT_SECRET / BACKUP_TOKEN）はここに書かず
+# `fly secrets set KEY=VALUE` で登録する。
 app = "temp-master"
 primary_region = "nrt"
 
@@ -13,10 +16,22 @@ primary_region = "nrt"
   auto_start_machines = true
   min_machines_running = 1
 
+  # ヘルスチェック: /healthz が 200 を返さないマシンにはトラフィックを流さない。
+  # grace_period はコンテナ起動〜DB 初期化が終わるまでの猶予。
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/healthz"
+
 [[vm]]
   cpu_kind = "shared"
   cpus = 1
-  memory_mb = 256
+  # 256MB → 512MB。根拠: FastAPI/uvicorn のベースラインに加え、DataStore がデバイスごとの
+  # 読み取り履歴をメモリ上に保持し（上限 262,800 件/台）、さらに /api/backup の VACUUM INTO が
+  # 一時的に DB サイズ分の作業領域を使うため、256MB では長期稼働時に OOM の懸念がある。詳細は README 参照。
+  memory_mb = 512
 
 [mounts]
   source = "temp_master_data"

@@ -1,3 +1,8 @@
+import asyncio
+import glob
+import os
+import sqlite3
+import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
@@ -469,3 +474,94 @@ class TestImportDataEndpoint:
         data = response.json()
         assert data["imported_devices"] == 0
         assert data["imported_readings"] == 0
+
+
+class TestBackupEndpoint:
+    """/api/backup の認証と VACUUM INTO スナップショットのテスト。"""
+
+    TOKEN = "test-backup-token-123"
+
+    @pytest.fixture
+    def backup_token(self):
+        with patch("app.main.BACKUP_TOKEN", self.TOKEN):
+            yield self.TOKEN
+
+    def _snapshot_dirs(self):
+        return set(glob.glob(os.path.join(tempfile.gettempdir(), "switchbot_backup_*")))
+
+    def test_backup_disabled_returns_404_when_token_unset(self, client):
+        with patch("app.main.BACKUP_TOKEN", ""):
+            response = client.get("/api/backup")
+            assert response.status_code == 404
+
+            # 正しそうなトークンを付けても、未設定なら無効のまま
+            response = client.get("/api/backup", headers={"Authorization": "Bearer anything"})
+            assert response.status_code == 404
+
+    def test_backup_missing_token_returns_401(self, client, backup_token):
+        response = client.get("/api/backup")
+
+        assert response.status_code == 401
+        assert response.headers.get("WWW-Authenticate") == "Bearer"
+
+    def test_backup_wrong_token_returns_401(self, client, backup_token):
+        response = client.get("/api/backup", headers={"Authorization": "Bearer wrong-token"})
+        assert response.status_code == 401
+
+        response = client.get("/api/backup", headers={"X-Backup-Token": "wrong-token"})
+        assert response.status_code == 401
+
+    def test_backup_malformed_authorization_returns_401(self, client, backup_token):
+        response = client.get("/api/backup", headers={"Authorization": backup_token})
+        assert response.status_code == 401
+
+        response = client.get("/api/backup", headers={"Authorization": f"Basic {backup_token}"})
+        assert response.status_code == 401
+
+    def test_backup_with_bearer_token_returns_sqlite_snapshot(self, client, backup_token, reset_data_store):
+        data_store.devices["device-001"] = MeterDevice(
+            device_id="device-001",
+            device_name="Test Meter",
+            device_type="Meter",
+        )
+        asyncio.run(main_module.save_device_to_db(data_store.devices["device-001"]))
+
+        before = self._snapshot_dirs()
+        response = client.get("/api/backup", headers={"Authorization": f"Bearer {backup_token}"})
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/x-sqlite3")
+        assert "switchbot_backup_" in response.headers["content-disposition"]
+        # SQLite ファイルのマジックヘッダ
+        assert response.content.startswith(b"SQLite format 3\x00")
+
+        # スナップショットの中身が読める（VACUUM INTO で整合性の取れたコピーになっている）
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            f.write(response.content)
+            f.flush()
+            conn = sqlite3.connect(f.name)
+            try:
+                assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+                rows = conn.execute("SELECT device_id FROM devices").fetchall()
+                assert rows == [("device-001",)]
+            finally:
+                conn.close()
+
+        # 送信後に一時ディレクトリが削除されている
+        assert self._snapshot_dirs() == before
+
+    def test_backup_with_x_backup_token_header(self, client, backup_token):
+        response = client.get("/api/backup", headers={"X-Backup-Token": backup_token})
+
+        assert response.status_code == 200
+        assert response.content.startswith(b"SQLite format 3\x00")
+
+    def test_backup_db_missing_returns_404(self, client, backup_token, tmp_path):
+        original_db_path = main_module.DB_PATH
+        main_module.DB_PATH = str(tmp_path / "does-not-exist.db")
+        try:
+            response = client.get("/api/backup", headers={"Authorization": f"Bearer {backup_token}"})
+            assert response.status_code == 404
+            assert response.json()["detail"] == "Database file not found"
+        finally:
+            main_module.DB_PATH = original_db_path

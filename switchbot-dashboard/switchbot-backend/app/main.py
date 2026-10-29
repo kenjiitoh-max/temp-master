@@ -3,6 +3,8 @@ import base64
 import hashlib
 import hmac
 import os
+import shutil
+import tempfile
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -15,9 +17,10 @@ import httpx
 from dotenv import load_dotenv
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel
 
 load_dotenv()
@@ -28,6 +31,10 @@ DB_PATH = os.getenv("DB_PATH", "/data/app.db" if os.path.exists("/data") else "a
 SWITCHBOT_API_BASE = "https://api.switch-bot.com/v1.1"
 SWITCHBOT_TOKEN = os.getenv("SWITCHBOT_TOKEN", "")
 SWITCHBOT_SECRET = os.getenv("SWITCHBOT_SECRET", "")
+
+# /api/backup 用の共有シークレット。Fly.io では `fly secrets set BACKUP_TOKEN=...` で設定する。
+# 未設定（空）の場合はバックアップエンドポイント自体を無効化し 404 を返す（「未設定＝誰でも取得可」にしない）。
+BACKUP_TOKEN = os.getenv("BACKUP_TOKEN", "")
 
 DATA_COLLECTION_INTERVAL = 120
 RATE_LIMIT_BACKOFF_BASE = 60
@@ -773,19 +780,72 @@ async def import_data(data: ImportData):
     }
 
 
-@app.get("/api/backup")
+def _extract_backup_token(request: Request) -> Optional[str]:
+    """リクエストからバックアップ用トークンを取り出す。
+
+    `Authorization: Bearer <token>` を優先し、無ければ `X-Backup-Token: <token>` を見る。
+    """
+    authorization = request.headers.get("Authorization", "")
+    scheme, _, credentials = authorization.partition(" ")
+    if scheme.lower() == "bearer" and credentials.strip():
+        return credentials.strip()
+    header_token = request.headers.get("X-Backup-Token", "")
+    return header_token.strip() or None
+
+
+async def require_backup_token(request: Request) -> None:
+    """/api/backup の認証。
+
+    - BACKUP_TOKEN 未設定 → 404（エンドポイントが存在しないように見せ、機能を無効化）
+    - トークン欠如・不一致 → 401
+    比較には hmac.compare_digest を使い、タイミング攻撃で1文字ずつ当てられないようにする。
+    """
+    if not BACKUP_TOKEN:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    provided = _extract_backup_token(request)
+    if provided is None or not hmac.compare_digest(provided.encode(), BACKUP_TOKEN.encode()):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing backup token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+def _remove_snapshot_dir(snapshot_dir: str) -> None:
+    """送信済みスナップショットの一時ディレクトリを削除する（失敗しても無視）。"""
+    shutil.rmtree(snapshot_dir, ignore_errors=True)
+
+
+@app.get("/api/backup", dependencies=[Depends(require_backup_token)])
 async def backup_database():
-    """Download the SQLite database file for backup purposes."""
+    """SQLite データベースの一貫したスナップショットをダウンロードする。
+
+    稼働中の DB ファイルをそのまま返すと、書き込み途中の状態（WAL 未反映・ページ不整合）が
+    混ざる恐れがあるため、`VACUUM INTO` で一時ファイルに整合性の取れたコピーを作ってから返す。
+    送信完了後に BackgroundTask で一時ファイルを削除する。
+    """
     if not os.path.exists(DB_PATH):
         raise HTTPException(status_code=404, detail="Database file not found")
-    
+
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"switchbot_backup_{timestamp}.db"
-    
+
+    snapshot_dir = tempfile.mkdtemp(prefix="switchbot_backup_")
+    snapshot_path = os.path.join(snapshot_dir, filename)
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            # VACUUM INTO は書き込み先が存在しないパスである必要がある（mkdtemp 直下なので未作成）
+            await db.execute("VACUUM INTO ?", (snapshot_path,))
+    except Exception as e:
+        _remove_snapshot_dir(snapshot_dir)
+        raise HTTPException(status_code=500, detail=f"Failed to create database snapshot: {e}")
+
     return FileResponse(
-        path=DB_PATH,
+        path=snapshot_path,
         filename=filename,
         media_type="application/x-sqlite3",
+        background=BackgroundTask(_remove_snapshot_dir, snapshot_dir),
     )
 
 
