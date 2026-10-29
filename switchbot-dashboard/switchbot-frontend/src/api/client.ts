@@ -8,7 +8,7 @@ import type {
 
 // 本番は FastAPI が同一オリジンで配信するので空文字（相対パス）。
 // 別オリジンの API を叩きたい場合は VITE_API_URL で上書きする。
-export const API_URL = import.meta.env.VITE_API_URL ?? ''
+export const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '')
 
 export class ApiError extends Error {
   status: number
