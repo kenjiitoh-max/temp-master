@@ -32,7 +32,9 @@ export default function App() {
             <strong>Error.</strong> {error}
           </div>
         )}
-        {!loading && <DeviceList meters={meters} timeScale={timeScale} reloadToken={reloadToken} />}
+        {!loading && !(error && meters.length === 0) && (
+          <DeviceList meters={meters} timeScale={timeScale} reloadToken={reloadToken} />
+        )}
         <footer className="mt-6 text-center text-xs text-fg-muted">
           Temp Master Dashboard v2.0 - Built with React + TypeScript + Vite + Tailwind CSS
         </footer>
