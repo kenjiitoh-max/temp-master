@@ -17,7 +17,7 @@ export function ThemeSwitcher() {
 
   return (
     <label className="flex items-center gap-2 text-sm">
-      <span className="text-fg-muted">Theme</span>
+      <span className="hidden text-fg-muted sm:inline">Theme</span>
       <select
         aria-label="テーマ切替"
         data-testid="theme-select"
