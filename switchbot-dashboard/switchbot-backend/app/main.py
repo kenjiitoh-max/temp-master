@@ -23,7 +23,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
-from starlette.background import BackgroundTask
 
 load_dotenv()
 
@@ -944,6 +943,16 @@ def _remove_file(path: str):
         pass
 
 
+class TemporaryFileResponse(FileResponse):
+    """FileResponse that deletes its file afterwards on every path (incl. 400/416 range errors and disconnects)."""
+
+    async def __call__(self, scope, receive, send):
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            _remove_file(self.path)
+
+
 @app.get("/api/backup", dependencies=[Depends(require_api_key)])
 async def backup_database():
     """Download a consistent snapshot of the SQLite database (taken with VACUUM INTO)."""
@@ -963,11 +972,10 @@ async def backup_database():
         logger.exception("Failed to create database snapshot")
         raise HTTPException(status_code=500, detail="Failed to create database backup")
     
-    return FileResponse(
+    return TemporaryFileResponse(
         path=snapshot_path,
         filename=filename,
         media_type="application/x-sqlite3",
-        background=BackgroundTask(_remove_file, snapshot_path),
     )
 
 

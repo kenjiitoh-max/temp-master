@@ -53,7 +53,7 @@ class TestApiKeyAuth:
 
 
 class TestBackupSnapshot:
-    async def test_backup_returns_consistent_copy_and_removes_temp_file(self, client, api_headers):
+    async def test_backup_returns_consistent_copy_and_removes_temp_file(self, client, api_headers, tmp_path):
         await save_device_to_db(MeterDevice(device_id="d1", device_name="M", device_type="Meter"))
         await save_reading_to_db(
             "d1", MeterReading(timestamp=datetime.now(timezone.utc), temperature=21.5, humidity=None)
@@ -71,8 +71,32 @@ class TestBackupSnapshot:
             response = client.get("/api/backup", headers=api_headers)
 
         assert response.status_code == 200
-        assert response.content.startswith(b"SQLite format 3\x00")
         assert "switchbot_backup_" in response.headers["content-disposition"]
+        assert len(created) == 1
+        assert not os.path.exists(created[0])
+
+        backup_path = tmp_path / "downloaded.db"
+        backup_path.write_bytes(response.content)
+        with sqlite3.connect(backup_path) as conn:
+            assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            assert conn.execute("SELECT device_id, device_name FROM devices").fetchall() == [("d1", "M")]
+            assert conn.execute("SELECT device_id, temperature, humidity FROM readings").fetchall() == [
+                ("d1", 21.5, None)
+            ]
+
+    async def test_unsatisfiable_range_still_removes_temp_file(self, client, api_headers):
+        created = []
+        real_mkstemp = main_module.tempfile.mkstemp
+
+        def tracking_mkstemp(*args, **kwargs):
+            fd, path = real_mkstemp(*args, **kwargs)
+            created.append(path)
+            return fd, path
+
+        with patch.object(main_module.tempfile, "mkstemp", side_effect=tracking_mkstemp):
+            response = client.get("/api/backup", headers={**api_headers, "Range": "bytes=999999999-"})
+
+        assert response.status_code == 416
         assert len(created) == 1
         assert not os.path.exists(created[0])
 
