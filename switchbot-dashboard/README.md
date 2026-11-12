@@ -69,6 +69,25 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
 - `GET /api/meters/{device_id}/history` - Returns temperature history with time_scale parameter
 - `POST /api/meters/refresh` - Triggers immediate data collection
 - `GET /api/status` - Returns backend status and configuration
+- `POST /api/import` - Imports devices/readings (requires `X-API-Key`)
+- `GET /api/backup` - Downloads a consistent snapshot of the SQLite DB (requires `X-API-Key`)
+
+`POST /api/meters/refresh` also requires the `X-API-Key` header.
+
+## Security configuration
+
+| Variable | Purpose |
+| --- | --- |
+| `API_KEY` | Shared secret for `/api/import`, `/api/backup`, `/api/meters/refresh`. If unset, the server logs a warning and those endpoints return 503. |
+| `ALLOWED_ORIGINS` | Comma-separated list of origins allowed by CORS. Empty = same-origin only. |
+
+On Fly.io set the key as a secret (never in `fly.toml`):
+
+```bash
+fly secrets set API_KEY="$(openssl rand -hex 32)"
+```
+
+The dashboard asks for the key the first time you press **Refresh Data** or **Download Backup** and keeps it in the browser's localStorage (use the **API Key** button to change it). `backup_database.sh` reads it from `TEMP_MASTER_API_KEY`.
 
 ## Notes
 

@@ -31,7 +31,10 @@ poetry install --no-interaction
 cd switchbot-dashboard/switchbot-backend
 echo "SWITCHBOT_TOKEN=${SWITCHBOT_TOKEN}" > .env
 echo "SWITCHBOT_SECRET=${SWITCHBOT_SECRET}" >> .env
+echo "API_KEY=local-test-key" >> .env
 ```
+
+`/api/import`, `/api/backup` and `/api/meters/refresh` require the `X-API-Key` header (401 without it, 503 if `API_KEY` is unset). Seed dummy data with e.g. `curl -X POST -H "X-API-Key: local-test-key" -H "Content-Type: application/json" -d @seed.json localhost:8000/api/import`. In the UI, Refresh / Download Backup prompt for the key once and store it in localStorage.
 
 ### 3. Symlink frontend static files
 
@@ -78,7 +81,7 @@ cd switchbot-dashboard/switchbot-backend
 poetry run pytest -v
 ```
 
-Expected: 97 tests pass.
+Expected: all tests pass (119 as of the API-key / backup hardening change).
 
 ## Architecture Notes
 

@@ -268,15 +268,15 @@ class TestGetMeterHistoryEndpoint:
 
 
 class TestRefreshMetersEndpoint:
-    def test_refresh_meters_no_credentials(self, client):
+    def test_refresh_meters_no_credentials(self, client, api_headers):
         with patch.object(main_module, "SWITCHBOT_TOKEN", ""), \
              patch.object(main_module, "SWITCHBOT_SECRET", ""):
-            response = client.post("/api/meters/refresh")
+            response = client.post("/api/meters/refresh", headers=api_headers)
             
             assert response.status_code == 500
             assert "credentials not configured" in response.json()["detail"].lower()
 
-    def test_refresh_meters_success(self, client, reset_data_store):
+    def test_refresh_meters_success(self, client, reset_data_store, api_headers):
         with patch.object(main_module, "SWITCHBOT_TOKEN", "test-token"), \
              patch.object(main_module, "SWITCHBOT_SECRET", "test-secret"), \
              patch("app.main.collect_data", new_callable=AsyncMock) as mock_collect:
@@ -287,7 +287,7 @@ class TestRefreshMetersEndpoint:
                 device_type="Meter",
             )
             
-            response = client.post("/api/meters/refresh")
+            response = client.post("/api/meters/refresh", headers=api_headers)
             
             assert response.status_code == 200
             data = response.json()
@@ -350,7 +350,7 @@ class TestGetStatusEndpoint:
 
 
 class TestImportDataEndpoint:
-    async def test_import_data_creates_devices(self, client, reset_data_store, temp_db_path):
+    async def test_import_data_creates_devices(self, client, reset_data_store, temp_db_path, api_headers):
         original_db_path = main_module.DB_PATH
         main_module.DB_PATH = temp_db_path
         
@@ -372,7 +372,7 @@ class TestImportDataEndpoint:
                 ]
             }
             
-            response = client.post("/api/import", json=import_data)
+            response = client.post("/api/import", json=import_data, headers=api_headers)
             
             assert response.status_code == 200
             data = response.json()
@@ -385,7 +385,7 @@ class TestImportDataEndpoint:
         finally:
             main_module.DB_PATH = original_db_path
 
-    async def test_import_data_creates_readings(self, client, reset_data_store, temp_db_path):
+    async def test_import_data_creates_readings(self, client, reset_data_store, temp_db_path, api_headers):
         original_db_path = main_module.DB_PATH
         main_module.DB_PATH = temp_db_path
         
@@ -416,7 +416,7 @@ class TestImportDataEndpoint:
                 ]
             }
             
-            response = client.post("/api/import", json=import_data)
+            response = client.post("/api/import", json=import_data, headers=api_headers)
             
             assert response.status_code == 200
             data = response.json()
@@ -425,7 +425,7 @@ class TestImportDataEndpoint:
         finally:
             main_module.DB_PATH = original_db_path
 
-    async def test_import_data_multiple_devices(self, client, reset_data_store, temp_db_path):
+    async def test_import_data_multiple_devices(self, client, reset_data_store, temp_db_path, api_headers):
         original_db_path = main_module.DB_PATH
         main_module.DB_PATH = temp_db_path
         
@@ -449,7 +449,7 @@ class TestImportDataEndpoint:
                 ]
             }
             
-            response = client.post("/api/import", json=import_data)
+            response = client.post("/api/import", json=import_data, headers=api_headers)
             
             assert response.status_code == 200
             data = response.json()
@@ -460,10 +460,10 @@ class TestImportDataEndpoint:
         finally:
             main_module.DB_PATH = original_db_path
 
-    def test_import_data_empty_devices(self, client, reset_data_store):
+    def test_import_data_empty_devices(self, client, reset_data_store, api_headers):
         import_data = {"devices": []}
         
-        response = client.post("/api/import", json=import_data)
+        response = client.post("/api/import", json=import_data, headers=api_headers)
         
         assert response.status_code == 200
         data = response.json()

@@ -10,6 +10,9 @@ from fastapi.testclient import TestClient
 
 os.environ["SWITCHBOT_TOKEN"] = ""
 os.environ["SWITCHBOT_SECRET"] = ""
+os.environ["API_KEY"] = "test-api-key"
+
+TEST_API_KEY = "test-api-key"
 
 from app.main import (
     DB_PATH,
@@ -46,8 +49,8 @@ async def reset_data_store(tmp_path) -> AsyncGenerator[DataStore, None]:
     import app.main as main_module
     
     original_devices = data_store.devices.copy()
-    original_history = data_store.history.copy()
     original_last_api_call = data_store.last_api_call
+    original_last_device_sync = data_store.last_device_sync
     original_backoff_until = data_store.backoff_until
     original_consecutive_errors = data_store.consecutive_errors
     original_is_collecting = data_store.is_collecting
@@ -55,8 +58,8 @@ async def reset_data_store(tmp_path) -> AsyncGenerator[DataStore, None]:
     original_db_path = main_module.DB_PATH
     
     data_store.devices = {}
-    data_store.history = {}
     data_store.last_api_call = 0
+    data_store.last_device_sync = 0
     data_store.backoff_until = 0
     data_store.consecutive_errors = 0
     data_store.is_collecting = False
@@ -68,8 +71,8 @@ async def reset_data_store(tmp_path) -> AsyncGenerator[DataStore, None]:
     yield data_store
     
     data_store.devices = original_devices
-    data_store.history = original_history
     data_store.last_api_call = original_last_api_call
+    data_store.last_device_sync = original_last_device_sync
     data_store.backoff_until = original_backoff_until
     data_store.consecutive_errors = original_consecutive_errors
     data_store.is_collecting = original_is_collecting
@@ -144,6 +147,11 @@ def sample_switchbot_status_response() -> dict:
         },
         "message": "success",
     }
+
+
+@pytest.fixture
+def api_headers() -> dict:
+    return {"X-API-Key": TEST_API_KEY}
 
 
 @pytest.fixture

@@ -80,8 +80,8 @@ class TestCallSwitchbotApi:
         
         with patch.object(main_module, "SWITCHBOT_TOKEN", "test-token"), \
              patch.object(main_module, "SWITCHBOT_SECRET", "test-secret"), \
-             patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+             patch("app.main.get_http_client") as mock_client:
+            mock_client.return_value.get = AsyncMock(return_value=mock_response)
             
             result = await call_switchbot_api("/devices")
             
@@ -96,8 +96,8 @@ class TestCallSwitchbotApi:
         
         with patch.object(main_module, "SWITCHBOT_TOKEN", "test-token"), \
              patch.object(main_module, "SWITCHBOT_SECRET", "test-secret"), \
-             patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+             patch("app.main.get_http_client") as mock_client:
+            mock_client.return_value.get = AsyncMock(return_value=mock_response)
             
             with pytest.raises(HTTPException) as exc_info:
                 await call_switchbot_api("/devices")
@@ -125,8 +125,8 @@ class TestCallSwitchbotApi:
         
         with patch.object(main_module, "SWITCHBOT_TOKEN", "test-token"), \
              patch.object(main_module, "SWITCHBOT_SECRET", "test-secret"), \
-             patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+             patch("app.main.get_http_client") as mock_client:
+            mock_client.return_value.get = AsyncMock(return_value=mock_response)
             
             with pytest.raises(HTTPException) as exc_info:
                 await call_switchbot_api("/devices")
@@ -136,8 +136,8 @@ class TestCallSwitchbotApi:
     async def test_call_api_request_error(self, reset_data_store):
         with patch.object(main_module, "SWITCHBOT_TOKEN", "test-token"), \
              patch.object(main_module, "SWITCHBOT_SECRET", "test-secret"), \
-             patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+             patch("app.main.get_http_client") as mock_client:
+            mock_client.return_value.get = AsyncMock(
                 side_effect=httpx.RequestError("Connection failed")
             )
             
@@ -166,8 +166,8 @@ class TestCallSwitchbotApi:
         
         with patch.object(main_module, "SWITCHBOT_TOKEN", "test-token"), \
              patch.object(main_module, "SWITCHBOT_SECRET", "test-secret"), \
-             patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+             patch("app.main.get_http_client") as mock_client:
+            mock_client.return_value.get = AsyncMock(return_value=mock_response)
             
             await call_switchbot_api("/devices")
             
@@ -184,8 +184,8 @@ class TestExponentialBackoff:
         
         with patch.object(main_module, "SWITCHBOT_TOKEN", "test-token"), \
              patch.object(main_module, "SWITCHBOT_SECRET", "test-secret"), \
-             patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+             patch("app.main.get_http_client") as mock_client:
+            mock_client.return_value.get = AsyncMock(return_value=mock_response)
             
             data_store.consecutive_errors = 0
             data_store.backoff_until = 0
@@ -207,8 +207,8 @@ class TestExponentialBackoff:
         
         with patch.object(main_module, "SWITCHBOT_TOKEN", "test-token"), \
              patch.object(main_module, "SWITCHBOT_SECRET", "test-secret"), \
-             patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+             patch("app.main.get_http_client") as mock_client:
+            mock_client.return_value.get = AsyncMock(return_value=mock_response)
             
             data_store.consecutive_errors = 10
             data_store.backoff_until = 0
@@ -230,8 +230,8 @@ class TestExponentialBackoff:
         
         with patch.object(main_module, "SWITCHBOT_TOKEN", "test-token"), \
              patch.object(main_module, "SWITCHBOT_SECRET", "test-secret"), \
-             patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+             patch("app.main.get_http_client") as mock_client:
+            mock_client.return_value.get = AsyncMock(return_value=mock_response)
             
             await call_switchbot_api("/devices")
             
