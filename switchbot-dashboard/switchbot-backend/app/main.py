@@ -2,7 +2,10 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import logging
 import os
+import secrets
+import tempfile
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -15,12 +18,21 @@ import httpx
 from dotenv import load_dotenv
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
 load_dotenv()
+
+logger = logging.getLogger("temp_master")
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
+    logger.addHandler(_handler)
+    logger.setLevel(os.getenv("LOG_LEVEL", "INFO").upper())
+    logger.propagate = False
 
 # Database path - use /data/app.db for persistent volume in production
 DB_PATH = os.getenv("DB_PATH", "/data/app.db" if os.path.exists("/data") else "app.db")
@@ -29,9 +41,19 @@ SWITCHBOT_API_BASE = "https://api.switch-bot.com/v1.1"
 SWITCHBOT_TOKEN = os.getenv("SWITCHBOT_TOKEN", "")
 SWITCHBOT_SECRET = os.getenv("SWITCHBOT_SECRET", "")
 
+# Shared secret required (as the X-API-Key header) by write/sensitive endpoints.
+API_KEY = os.getenv("API_KEY", "")
+
+# Comma-separated list of origins allowed to call the API cross-origin.
+# The bundled frontend is served from the same origin, so this can stay empty.
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+
 DATA_COLLECTION_INTERVAL = 120
+DEVICE_LIST_REFRESH_INTERVAL = 1800
+CLEANUP_INTERVAL = 86400
 RATE_LIMIT_BACKOFF_BASE = 60
 MAX_BACKOFF = 600
+HTTP_TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 
 METER_DEVICE_TYPES = ["Meter", "MeterPlus", "WoIOSensor", "Meter Plus (JP)", "Meter Pro", "Meter Pro CO2", "Hub 2"]
 
@@ -47,7 +69,7 @@ class TimeScale(str, Enum):
 class MeterReading(BaseModel):
     timestamp: datetime
     temperature: float
-    humidity: int
+    humidity: Optional[int] = None
     battery: Optional[int] = None
 
 
@@ -76,12 +98,14 @@ class LatencyLog(BaseModel):
 class DataStore:
     def __init__(self):
         self.devices: dict[str, MeterDevice] = {}
-        self.history: dict[str, list[MeterReading]] = {}
         self.last_api_call: float = 0
+        self.last_device_sync: float = 0
         self.backoff_until: float = 0
         self.consecutive_errors: int = 0
+        self.device_failures: dict[str, int] = {}
         self.is_collecting: bool = False
         self.collection_task: Optional[asyncio.Task] = None
+        self.cleanup_task: Optional[asyncio.Task] = None
         self.db_initialized: bool = False
 
 
@@ -109,11 +133,12 @@ async def init_database():
                 device_id TEXT NOT NULL,
                 timestamp TEXT NOT NULL,
                 temperature REAL NOT NULL,
-                humidity INTEGER NOT NULL,
+                humidity INTEGER,
                 battery INTEGER,
                 FOREIGN KEY (device_id) REFERENCES devices(device_id)
             )
         """)
+        await migrate_readings_humidity_nullable(db)
         await db.execute("""
             CREATE INDEX IF NOT EXISTS idx_readings_device_timestamp 
             ON readings(device_id, timestamp)
@@ -142,6 +167,34 @@ async def init_database():
     data_store.db_initialized = True
 
 
+async def migrate_readings_humidity_nullable(db: aiosqlite.Connection):
+    """Older databases declared readings.humidity NOT NULL; rebuild the table so it accepts NULL."""
+    async with db.execute("PRAGMA table_info(readings)") as cursor:
+        columns = await cursor.fetchall()
+    humidity = next((c for c in columns if c[1] == "humidity"), None)
+    if humidity is None or not humidity[3]:
+        return
+    logger.info("Migrating readings table: making humidity nullable")
+    await db.commit()
+    await db.executescript("""
+        BEGIN;
+        CREATE TABLE readings_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            temperature REAL NOT NULL,
+            humidity INTEGER,
+            battery INTEGER,
+            FOREIGN KEY (device_id) REFERENCES devices(device_id)
+        );
+        INSERT INTO readings_new (id, device_id, timestamp, temperature, humidity, battery)
+            SELECT id, device_id, timestamp, temperature, humidity, battery FROM readings;
+        DROP TABLE readings;
+        ALTER TABLE readings_new RENAME TO readings;
+        COMMIT;
+    """)
+
+
 async def load_devices_from_db():
     """Load devices from database into memory cache."""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -159,42 +212,75 @@ async def load_devices_from_db():
                     last_updated=datetime.fromisoformat(row["last_updated"]) if row["last_updated"] else None,
                 )
                 data_store.devices[device.device_id] = device
-                data_store.history[device.device_id] = []
+
+
+def _device_row(device: MeterDevice) -> tuple:
+    return (
+        device.device_id,
+        device.device_name,
+        device.device_type,
+        device.hub_device_id,
+        device.current_temperature,
+        device.current_humidity,
+        device.battery,
+        device.last_updated.isoformat() if device.last_updated else None,
+    )
+
+
+def _reading_row(device_id: str, reading: MeterReading) -> tuple:
+    return (
+        device_id,
+        reading.timestamp.isoformat(),
+        reading.temperature,
+        reading.humidity,
+        reading.battery,
+    )
+
+
+UPSERT_DEVICE_SQL = """
+    INSERT OR REPLACE INTO devices 
+    (device_id, device_name, device_type, hub_device_id, current_temperature, current_humidity, battery, last_updated)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+INSERT_READING_SQL = """
+    INSERT INTO readings (device_id, timestamp, temperature, humidity, battery)
+    VALUES (?, ?, ?, ?, ?)
+"""
 
 
 async def save_device_to_db(device: MeterDevice):
     """Save or update a device in the database."""
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            INSERT OR REPLACE INTO devices 
-            (device_id, device_name, device_type, hub_device_id, current_temperature, current_humidity, battery, last_updated)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            device.device_id,
-            device.device_name,
-            device.device_type,
-            device.hub_device_id,
-            device.current_temperature,
-            device.current_humidity,
-            device.battery,
-            device.last_updated.isoformat() if device.last_updated else None,
-        ))
+        await db.execute(UPSERT_DEVICE_SQL, _device_row(device))
         await db.commit()
 
 
 async def save_reading_to_db(device_id: str, reading: MeterReading):
     """Save a reading to the database."""
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("""
-            INSERT INTO readings (device_id, timestamp, temperature, humidity, battery)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            device_id,
-            reading.timestamp.isoformat(),
-            reading.temperature,
-            reading.humidity,
-            reading.battery,
-        ))
+        await db.execute(INSERT_READING_SQL, _reading_row(device_id, reading))
+        await db.commit()
+
+
+async def save_device_with_readings(device: MeterDevice, readings: list[MeterReading]):
+    """Upsert a device and insert its readings using one connection and one transaction."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(UPSERT_DEVICE_SQL, _device_row(device))
+        if readings:
+            await db.executemany(
+                INSERT_READING_SQL,
+                [_reading_row(device.device_id, r) for r in readings],
+            )
+        await db.commit()
+
+
+async def delete_devices_from_db(device_ids: list[str]):
+    """Remove devices (but keep their readings) from the devices table."""
+    if not device_ids:
+        return
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.executemany("DELETE FROM devices WHERE device_id = ?", [(d,) for d in device_ids])
         await db.commit()
 
 
@@ -385,6 +471,26 @@ def generate_switchbot_headers() -> dict:
     }
 
 
+def get_http_client() -> httpx.AsyncClient:
+    """Return the shared HTTP client created in lifespan (created lazily if lifespan didn't run)."""
+    client = getattr(app.state, "http_client", None)
+    if client is None or client.is_closed:
+        client = httpx.AsyncClient(timeout=HTTP_TIMEOUT)
+        app.state.http_client = client
+    return client
+
+
+def register_api_failure() -> int:
+    """Count a failed SwitchBot call and start an exponential backoff. Returns the backoff in seconds."""
+    data_store.consecutive_errors += 1
+    backoff_time = min(
+        RATE_LIMIT_BACKOFF_BASE * (2 ** data_store.consecutive_errors),
+        MAX_BACKOFF,
+    )
+    data_store.backoff_until = time.time() + backoff_time
+    return backoff_time
+
+
 async def call_switchbot_api(endpoint: str, device_id: Optional[str] = None) -> dict:
     if time.time() < data_store.backoff_until:
         raise HTTPException(
@@ -397,69 +503,67 @@ async def call_switchbot_api(endpoint: str, device_id: Optional[str] = None) -> 
         raise HTTPException(status_code=500, detail="SwitchBot credentials not configured")
     
     start_time = time.perf_counter()
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(f"{SWITCHBOT_API_BASE}{endpoint}", headers=headers)
-            end_time = time.perf_counter()
-            latency_ms = (end_time - start_time) * 1000
-            data_store.last_api_call = time.time()
-            
-            if response.status_code == 429:
-                data_store.consecutive_errors += 1
-                backoff_time = min(
-                    RATE_LIMIT_BACKOFF_BASE * (2 ** data_store.consecutive_errors),
-                    MAX_BACKOFF,
-                )
-                data_store.backoff_until = time.time() + backoff_time
-                await save_latency_log(
-                    endpoint=endpoint,
-                    latency_ms=latency_ms,
-                    status_code=429,
-                    success=False,
-                    device_id=device_id,
-                    error_message=f"Rate limited. Backing off for {backoff_time} seconds",
-                )
-                raise HTTPException(
-                    status_code=429,
-                    detail=f"Rate limited by SwitchBot API. Backing off for {backoff_time} seconds",
-                )
-            
-            if response.status_code != 200:
-                await save_latency_log(
-                    endpoint=endpoint,
-                    latency_ms=latency_ms,
-                    status_code=response.status_code,
-                    success=False,
-                    device_id=device_id,
-                    error_message=f"SwitchBot API error: {response.text}",
-                )
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"SwitchBot API error: {response.text}",
-                )
-            
+    client = get_http_client()
+    try:
+        response = await client.get(f"{SWITCHBOT_API_BASE}{endpoint}", headers=headers)
+        end_time = time.perf_counter()
+        latency_ms = (end_time - start_time) * 1000
+        data_store.last_api_call = time.time()
+        
+        if response.status_code == 429:
+            backoff_time = register_api_failure()
             await save_latency_log(
                 endpoint=endpoint,
                 latency_ms=latency_ms,
-                status_code=200,
-                success=True,
-                device_id=device_id,
-            )
-            data_store.consecutive_errors = 0
-            return response.json()
-            
-        except httpx.RequestError as e:
-            end_time = time.perf_counter()
-            latency_ms = (end_time - start_time) * 1000
-            await save_latency_log(
-                endpoint=endpoint,
-                latency_ms=latency_ms,
-                status_code=500,
+                status_code=429,
                 success=False,
                 device_id=device_id,
-                error_message=f"Request error: {str(e)}",
+                error_message=f"Rate limited. Backing off for {backoff_time} seconds",
             )
-            raise HTTPException(status_code=500, detail=f"Request error: {str(e)}")
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limited by SwitchBot API. Backing off for {backoff_time} seconds",
+            )
+        
+        if response.status_code != 200:
+            backoff_time = register_api_failure()
+            await save_latency_log(
+                endpoint=endpoint,
+                latency_ms=latency_ms,
+                status_code=response.status_code,
+                success=False,
+                device_id=device_id,
+                error_message=f"SwitchBot API error: {response.text} (backing off for {backoff_time} seconds)",
+            )
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"SwitchBot API error: {response.text}",
+            )
+        
+        await save_latency_log(
+            endpoint=endpoint,
+            latency_ms=latency_ms,
+            status_code=200,
+            success=True,
+            device_id=device_id,
+        )
+        data_store.consecutive_errors = 0
+        return response.json()
+        
+    except httpx.RequestError as e:
+        end_time = time.perf_counter()
+        latency_ms = (end_time - start_time) * 1000
+        data_store.last_api_call = time.time()
+        backoff_time = register_api_failure()
+        await save_latency_log(
+            endpoint=endpoint,
+            latency_ms=latency_ms,
+            status_code=500,
+            success=False,
+            device_id=device_id,
+            error_message=f"Request error: {e!r} (backing off for {backoff_time} seconds)",
+        )
+        raise HTTPException(status_code=500, detail=f"Request error: {str(e)}")
 
 
 async def fetch_devices() -> list[MeterDevice]:
@@ -500,99 +604,160 @@ async def fetch_device_status(device_id: str) -> dict:
     return response.get("body", {})
 
 
-async def collect_data():
+async def sync_device_list(force: bool = False):
+    """Re-fetch the device list periodically and drop devices that were removed on the SwitchBot side."""
+    if not force and data_store.last_device_sync and \
+            time.time() - data_store.last_device_sync < DEVICE_LIST_REFRESH_INTERVAL:
+        return
+
+    devices = await fetch_devices()
+    fetched_ids = {device.device_id for device in devices}
+
+    for device in devices:
+        if device.device_id not in data_store.devices:
+            data_store.devices[device.device_id] = device
+        else:
+            data_store.devices[device.device_id].device_name = device.device_name
+            data_store.devices[device.device_id].device_type = device.device_type
+
+    removed = [device_id for device_id in data_store.devices if device_id not in fetched_ids]
+    for device_id in removed:
+        del data_store.devices[device_id]
+    if removed:
+        logger.info("Removed %d device(s) no longer present in SwitchBot: %s", len(removed), removed)
+        await delete_devices_from_db(removed)
+
+    data_store.last_device_sync = time.time()
+
+
+async def collect_data(force_device_refresh: bool = False):
     if not SWITCHBOT_TOKEN or not SWITCHBOT_SECRET:
         return
     
     try:
-        devices = await fetch_devices()
-        
-        for device in devices:
-            if device.device_id not in data_store.devices:
-                data_store.devices[device.device_id] = device
-                data_store.history[device.device_id] = []
-            else:
-                data_store.devices[device.device_id].device_name = device.device_name
-                data_store.devices[device.device_id].device_type = device.device_type
-        
-        for device_id in list(data_store.devices.keys()):
-            try:
-                status = await fetch_device_status(device_id)
-                
-                temperature = status.get("temperature")
-                humidity = status.get("humidity")
-                battery = status.get("battery")
-                
-                if temperature is not None:
-                    now = datetime.now(timezone.utc)
-                    
-                    data_store.devices[device_id].current_temperature = temperature
-                    data_store.devices[device_id].current_humidity = humidity
-                    data_store.devices[device_id].battery = battery
-                    data_store.devices[device_id].last_updated = now
-                    
-                    reading = MeterReading(
-                        timestamp=now,
-                        temperature=temperature,
-                        humidity=humidity if humidity is not None else 0,
-                        battery=battery,
-                    )
-                    data_store.history[device_id].append(reading)
-                    
-                    # Save to database for persistence
-                    await save_device_to_db(data_store.devices[device_id])
-                    await save_reading_to_db(device_id, reading)
-                    
-                    max_readings = 365 * 24 * 30
-                    if len(data_store.history[device_id]) > max_readings:
-                        data_store.history[device_id] = data_store.history[device_id][-max_readings:]
-                        
-            except HTTPException as e:
-                if e.status_code == 429:
-                    break
-                    
-    except HTTPException:
-        pass
+        await sync_device_list(force=force_device_refresh)
+    except HTTPException as e:
+        logger.warning("Failed to fetch SwitchBot device list (%s): %s", e.status_code, e.detail)
+        return
     except Exception:
-        pass
+        logger.exception("Unexpected error while fetching SwitchBot device list")
+        return
+
+    # Devices that failed recently go last, so a broken device that triggers the global
+    # backoff does not keep the healthy ones from being collected.
+    device_ids = sorted(data_store.devices, key=lambda d: data_store.device_failures.get(d, 0))
+    for device_id in device_ids:
+        try:
+            status = await fetch_device_status(device_id)
+            
+            temperature = status.get("temperature")
+            humidity = status.get("humidity")
+            battery = status.get("battery")
+            
+            if temperature is None:
+                continue
+
+            now = datetime.now(timezone.utc)
+            device = data_store.devices[device_id]
+            device.current_temperature = temperature
+            device.current_humidity = humidity
+            device.battery = battery
+            device.last_updated = now
+            
+            reading = MeterReading(
+                timestamp=now,
+                temperature=temperature,
+                humidity=humidity,
+                battery=battery,
+            )
+            await save_device_with_readings(device, [reading])
+            data_store.device_failures.pop(device_id, None)
+                    
+        except HTTPException as e:
+            logger.warning("Failed to fetch status for %s (%s): %s", device_id, e.status_code, e.detail)
+            if e.status_code == 429:
+                break
+            data_store.device_failures[device_id] = data_store.device_failures.get(device_id, 0) + 1
+        except Exception:
+            logger.exception("Unexpected error while collecting data for %s", device_id)
+            data_store.device_failures[device_id] = data_store.device_failures.get(device_id, 0) + 1
 
 
 async def background_collector():
     while True:
-        await collect_data()
+        try:
+            await collect_data()
+        except Exception:
+            logger.exception("Background collection cycle failed")
         await asyncio.sleep(DATA_COLLECTION_INTERVAL)
+
+
+async def run_cleanup():
+    try:
+        await cleanup_old_readings()
+        await cleanup_old_latency_logs()
+        logger.info("Old readings and latency logs cleaned up")
+    except Exception:
+        logger.exception("Database cleanup failed")
+
+
+async def periodic_cleanup():
+    while True:
+        await run_cleanup()
+        await asyncio.sleep(CLEANUP_INTERVAL)
+
+
+async def _cancel_task(task: Optional[asyncio.Task]):
+    if task is None:
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize database and load existing data
+    if not API_KEY:
+        logger.warning(
+            "API_KEY is not set: protected endpoints (/api/import, /api/backup, /api/meters/refresh) "
+            "will reject every request with 503 until it is configured."
+        )
+
+    app.state.http_client = httpx.AsyncClient(timeout=HTTP_TIMEOUT)
+
     await init_database()
     await load_devices_from_db()
     
+    data_store.cleanup_task = asyncio.create_task(periodic_cleanup())
     if SWITCHBOT_TOKEN and SWITCHBOT_SECRET:
         data_store.collection_task = asyncio.create_task(background_collector())
     yield
-    if data_store.collection_task:
-        data_store.collection_task.cancel()
-        try:
-            await data_store.collection_task
-        except asyncio.CancelledError:
-            pass
-    
-    # Cleanup old data periodically (on shutdown)
-    await cleanup_old_readings()
-    await cleanup_old_latency_logs()
+    await _cancel_task(data_store.collection_task)
+    await _cancel_task(data_store.cleanup_task)
+    await app.state.http_client.aclose()
 
 
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-API-Key"],
 )
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+async def require_api_key(api_key: Optional[str] = Security(api_key_header)):
+    """Dependency for write/sensitive endpoints: the X-API-Key header must match API_KEY."""
+    if not API_KEY:
+        raise HTTPException(status_code=503, detail="API key is not configured on the server")
+    if not api_key or not secrets.compare_digest(api_key.encode(), API_KEY.encode()):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
 @app.get("/healthz")
@@ -641,12 +806,12 @@ async def get_meter_history(device_id: str, time_scale: TimeScale = TimeScale.HO
     }
 
 
-@app.post("/api/meters/refresh")
+@app.post("/api/meters/refresh", dependencies=[Depends(require_api_key)])
 async def refresh_meters():
     if not SWITCHBOT_TOKEN or not SWITCHBOT_SECRET:
         raise HTTPException(status_code=500, detail="SwitchBot credentials not configured")
     
-    await collect_data()
+    await collect_data(force_device_refresh=True)
     
     return {
         "status": "ok",
@@ -709,7 +874,7 @@ async def get_latency_stats_endpoint(
 class ImportReadingData(BaseModel):
     timestamp: str
     temperature: float
-    humidity: int
+    humidity: Optional[int] = None
     battery: Optional[int] = None
 
 
@@ -729,14 +894,13 @@ class ImportData(BaseModel):
     devices: list[ImportDeviceData]
 
 
-@app.post("/api/import")
+@app.post("/api/import", dependencies=[Depends(require_api_key)])
 async def import_data(data: ImportData):
     """Import historical data from another backend instance."""
-    imported_devices = 0
-    imported_readings = 0
-    
+    devices: list[MeterDevice] = []
+    readings: list[tuple] = []
+
     for device_data in data.devices:
-        # Create or update device
         device = MeterDevice(
             device_id=device_data.device_id,
             device_name=device_data.device_name,
@@ -747,15 +911,7 @@ async def import_data(data: ImportData):
             battery=device_data.battery,
             last_updated=datetime.fromisoformat(device_data.last_updated.replace('Z', '+00:00')) if device_data.last_updated else None,
         )
-        
-        data_store.devices[device.device_id] = device
-        if device.device_id not in data_store.history:
-            data_store.history[device.device_id] = []
-        
-        await save_device_to_db(device)
-        imported_devices += 1
-        
-        # Import readings
+        devices.append(device)
         for reading_data in device_data.readings:
             reading = MeterReading(
                 timestamp=datetime.fromisoformat(reading_data.timestamp.replace('Z', '+00:00')),
@@ -763,27 +919,61 @@ async def import_data(data: ImportData):
                 humidity=reading_data.humidity,
                 battery=reading_data.battery,
             )
-            await save_reading_to_db(device.device_id, reading)
-            imported_readings += 1
+            readings.append(_reading_row(device.device_id, reading))
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.executemany(UPSERT_DEVICE_SQL, [_device_row(d) for d in devices])
+        await db.executemany(INSERT_READING_SQL, readings)
+        await db.commit()
+
+    for device in devices:
+        data_store.devices[device.device_id] = device
     
     return {
         "status": "ok",
-        "imported_devices": imported_devices,
-        "imported_readings": imported_readings,
+        "imported_devices": len(devices),
+        "imported_readings": len(readings),
     }
 
 
-@app.get("/api/backup")
+def _remove_file(path: str):
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+
+
+class TemporaryFileResponse(FileResponse):
+    """FileResponse that deletes its file afterwards on every path (incl. 400/416 range errors and disconnects)."""
+
+    async def __call__(self, scope, receive, send):
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            _remove_file(self.path)
+
+
+@app.get("/api/backup", dependencies=[Depends(require_api_key)])
 async def backup_database():
-    """Download the SQLite database file for backup purposes."""
+    """Download a consistent snapshot of the SQLite database (taken with VACUUM INTO)."""
     if not os.path.exists(DB_PATH):
         raise HTTPException(status_code=404, detail="Database file not found")
     
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"switchbot_backup_{timestamp}.db"
+
+    fd, snapshot_path = tempfile.mkstemp(prefix="switchbot_backup_", suffix=".db")
+    os.close(fd)
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("VACUUM INTO ?", (snapshot_path,))
+    except Exception:
+        _remove_file(snapshot_path)
+        logger.exception("Failed to create database snapshot")
+        raise HTTPException(status_code=500, detail="Failed to create database backup")
     
-    return FileResponse(
-        path=DB_PATH,
+    return TemporaryFileResponse(
+        path=snapshot_path,
         filename=filename,
         media_type="application/x-sqlite3",
     )

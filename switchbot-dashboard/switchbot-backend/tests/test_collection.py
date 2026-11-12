@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -7,8 +6,8 @@ from fastapi import HTTPException
 import app.main as main_module
 from app.main import (
     MeterDevice,
-    MeterReading,
     collect_data,
+    get_readings_from_db,
     data_store,
     init_database,
 )
@@ -62,7 +61,7 @@ class TestCollectData:
         finally:
             main_module.DB_PATH = original_db_path
 
-    async def test_collect_data_adds_to_history(self, reset_data_store, temp_db_path):
+    async def test_collect_data_saves_reading_to_db(self, reset_data_store, temp_db_path):
         original_db_path = main_module.DB_PATH
         main_module.DB_PATH = temp_db_path
         
@@ -93,9 +92,9 @@ class TestCollectData:
                 
                 await collect_data()
                 
-                assert "device-001" in data_store.history
-                assert len(data_store.history["device-001"]) == 1
-                assert data_store.history["device-001"][0].temperature == 25.5
+                readings = await get_readings_from_db("device-001", 0)
+                assert len(readings) == 1
+                assert readings[0].temperature == 25.5
         finally:
             main_module.DB_PATH = original_db_path
 
@@ -112,7 +111,6 @@ class TestCollectData:
                 device_type="Meter",
                 current_temperature=20.0,
             )
-            data_store.history["device-001"] = []
             
             mock_devices = [
                 MeterDevice(
@@ -250,57 +248,7 @@ class TestCollectData:
                 
                 assert "device-001" in data_store.devices
                 assert data_store.devices["device-001"].current_temperature is None
-                assert len(data_store.history.get("device-001", [])) == 0
-        finally:
-            main_module.DB_PATH = original_db_path
-
-    async def test_collect_data_trims_history(self, reset_data_store, temp_db_path):
-        original_db_path = main_module.DB_PATH
-        main_module.DB_PATH = temp_db_path
-        
-        try:
-            await init_database()
-            
-            max_readings = 365 * 24 * 30
-            data_store.devices["device-001"] = MeterDevice(
-                device_id="device-001",
-                device_name="Test Meter",
-                device_type="Meter",
-            )
-            data_store.history["device-001"] = [
-                MeterReading(
-                    timestamp=datetime.now(timezone.utc),
-                    temperature=25.0,
-                    humidity=60,
-                )
-                for _ in range(max_readings)
-            ]
-            
-            mock_devices = [
-                MeterDevice(
-                    device_id="device-001",
-                    device_name="Test Meter",
-                    device_type="Meter",
-                )
-            ]
-            
-            mock_status = {
-                "temperature": 26.0,
-                "humidity": 65,
-                "battery": 80,
-            }
-            
-            with patch.object(main_module, "SWITCHBOT_TOKEN", "test-token"), \
-                 patch.object(main_module, "SWITCHBOT_SECRET", "test-secret"), \
-                 patch("app.main.fetch_devices", new_callable=AsyncMock) as mock_fetch_devices, \
-                 patch("app.main.fetch_device_status", new_callable=AsyncMock) as mock_fetch_status:
-                
-                mock_fetch_devices.return_value = mock_devices
-                mock_fetch_status.return_value = mock_status
-                
-                await collect_data()
-                
-                assert len(data_store.history["device-001"]) == max_readings
+                assert await get_readings_from_db("device-001", 0) == []
         finally:
             main_module.DB_PATH = original_db_path
 

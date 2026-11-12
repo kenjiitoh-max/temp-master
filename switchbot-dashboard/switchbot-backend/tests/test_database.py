@@ -281,7 +281,6 @@ class TestLoadDevicesFromDb:
             await save_device_to_db(device2)
             
             data_store.devices = {}
-            data_store.history = {}
             
             await load_devices_from_db()
             
@@ -293,30 +292,6 @@ class TestLoadDevicesFromDb:
         finally:
             main_module.DB_PATH = original_db_path
 
-    async def test_load_devices_initializes_history(self, temp_db_path, reset_data_store):
-        original_db_path = main_module.DB_PATH
-        main_module.DB_PATH = temp_db_path
-        
-        try:
-            await init_database()
-            
-            device = MeterDevice(
-                device_id="test-001",
-                device_name="Test Meter",
-                device_type="Meter",
-            )
-            await save_device_to_db(device)
-            
-            data_store.devices = {}
-            data_store.history = {}
-            
-            await load_devices_from_db()
-            
-            assert "test-001" in data_store.history
-            assert data_store.history["test-001"] == []
-        finally:
-            main_module.DB_PATH = original_db_path
-
     async def test_load_devices_empty_db(self, temp_db_path, reset_data_store):
         original_db_path = main_module.DB_PATH
         main_module.DB_PATH = temp_db_path
@@ -325,12 +300,10 @@ class TestLoadDevicesFromDb:
             await init_database()
             
             data_store.devices = {}
-            data_store.history = {}
             
             await load_devices_from_db()
             
             assert len(data_store.devices) == 0
-            assert len(data_store.history) == 0
         finally:
             main_module.DB_PATH = original_db_path
 

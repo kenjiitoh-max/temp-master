@@ -98,6 +98,7 @@
           </div>
           <button type="button" id="btn-refresh" class="btn btn-primary">Refresh Data</button>
           <button type="button" id="btn-backup" class="btn btn-default">Download Backup</button>
+          <button type="button" id="btn-api-key" class="btn btn-default" title="Set the API key used for Refresh / Backup">API Key</button>
         </form>
       </div>
     </div>
@@ -273,17 +274,108 @@
       });
     }
 
-    function triggerRefresh(callback) {
+    // ============================================================
+    // API key (X-API-Key header) for protected endpoints
+    // ============================================================
+
+    var API_KEY_STORAGE_KEY = 'tempMasterApiKey';
+
+    function getStoredApiKey() {
+      try {
+        return window.localStorage.getItem(API_KEY_STORAGE_KEY) || '';
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function storeApiKey(key) {
+      try {
+        if (key) {
+          window.localStorage.setItem(API_KEY_STORAGE_KEY, key);
+        } else {
+          window.localStorage.removeItem(API_KEY_STORAGE_KEY);
+        }
+      } catch (e) { /* storage unavailable: key lives only for this call */ }
+    }
+
+    // Returns the stored key, or asks the user for one. Returns '' if cancelled.
+    function ensureApiKey(forcePrompt) {
+      var key = getStoredApiKey();
+      if (key && !forcePrompt) return key;
+      var entered = window.prompt('Enter the API key for Temp Master (Refresh / Backup):', '');
+      if (entered === null) return '';
+      entered = $.trim(entered);
+      storeApiKey(entered);
+      return entered;
+    }
+
+    function describeAuthError(statusCode) {
+      if (statusCode === 401) return 'Invalid API key';
+      if (statusCode === 503) return 'API key is not configured on the server';
+      return null;
+    }
+
+    function triggerRefresh(callback, isRetry) {
+      var key = ensureApiKey(false);
+      if (!key) {
+        if (callback) callback('API key is required', null);
+        return;
+      }
       $.ajax({
         url: API_URL + '/api/meters/refresh',
         type: 'POST',
+        headers: { 'X-API-Key': key },
         success: function(data) {
           if (callback) callback(null, data);
         },
         error: function(xhr, status, err) {
-          if (callback) callback(err || status, null);
+          if (xhr.status === 401 && !isRetry) {
+            storeApiKey('');
+            triggerRefresh(callback, true);
+            return;
+          }
+          if (callback) callback(describeAuthError(xhr.status) || err || status, null);
         }
       });
+    }
+
+    // The backup needs the X-API-Key header, so it can't be a plain link:
+    // download it as a Blob and hand it to the browser via a temporary <a download>.
+    function downloadBackup(callback, isRetry) {
+      var key = ensureApiKey(false);
+      if (!key) {
+        if (callback) callback('API key is required');
+        return;
+      }
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', API_URL + '/api/backup');
+      xhr.responseType = 'blob';
+      xhr.setRequestHeader('X-API-Key', key);
+      xhr.onload = function() {
+        if (xhr.status === 401 && !isRetry) {
+          storeApiKey('');
+          downloadBackup(callback, true);
+          return;
+        }
+        if (xhr.status !== 200) {
+          if (callback) callback(describeAuthError(xhr.status) || ('HTTP ' + xhr.status));
+          return;
+        }
+        var match = /filename="?([^";]+)"?/.exec(xhr.getResponseHeader('Content-Disposition') || '');
+        var url = window.URL.createObjectURL(xhr.response);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = match ? match[1] : 'switchbot_backup.db';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function() { window.URL.revokeObjectURL(url); }, 1000);
+        if (callback) callback(null);
+      };
+      xhr.onerror = function() {
+        if (callback) callback('Network error');
+      };
+      xhr.send();
     }
 
     // ============================================================
@@ -297,7 +389,9 @@
           statusData = statusResp;
 
           $('#loading').hide();
-          $('#error').hide();
+          if (!actionErrorShown) {
+            $('#error').hide();
+          }
           $('#connection-status').removeClass('label-danger').addClass('label-success').text('Connected');
 
           updateStatusBar();
@@ -311,11 +405,29 @@
       });
     }
 
+    // Errors from user actions (refresh/backup) stay visible until the next action;
+    // the periodic fetchData() only clears its own errors.
+    var actionErrorShown = false;
+
     function showError(msg) {
+      actionErrorShown = false;
       $('#loading').hide();
       $('#error-text').text(msg);
       $('#error').show();
       $('#connection-status').removeClass('label-success').addClass('label-danger').text('Disconnected');
+    }
+
+    function showActionError(msg) {
+      actionErrorShown = true;
+      $('#error-text').text(msg);
+      $('#error').show();
+    }
+
+    function clearActionError() {
+      if (actionErrorShown) {
+        actionErrorShown = false;
+        $('#error').hide();
+      }
     }
 
     // ============================================================
@@ -535,9 +647,10 @@
       $('#btn-refresh').click(function() {
         var $btn = $(this);
         $btn.prop('disabled', true).text('Refreshing...');
+        clearActionError();
         triggerRefresh(function(err) {
           if (err) {
-            showError('Failed to refresh: ' + err);
+            showActionError('Failed to refresh: ' + err);
           }
           fetchData();
           $btn.prop('disabled', false).text('Refresh Data');
@@ -545,7 +658,20 @@
       });
 
       $('#btn-backup').click(function() {
-        window.open(API_URL + '/api/backup', '_blank');
+        var $btn = $(this);
+        $btn.prop('disabled', true).text('Downloading...');
+        clearActionError();
+        downloadBackup(function(err) {
+          if (err) {
+            showActionError('Failed to download backup: ' + err);
+          }
+          $btn.prop('disabled', false).text('Download Backup');
+        });
+      });
+
+      $('#btn-api-key').click(function() {
+        storeApiKey('');
+        ensureApiKey(true);
       });
     });
   </script>
