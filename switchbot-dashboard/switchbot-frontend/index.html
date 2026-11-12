@@ -389,7 +389,9 @@
           statusData = statusResp;
 
           $('#loading').hide();
-          $('#error').hide();
+          if (!actionErrorShown) {
+            $('#error').hide();
+          }
           $('#connection-status').removeClass('label-danger').addClass('label-success').text('Connected');
 
           updateStatusBar();
@@ -403,11 +405,29 @@
       });
     }
 
+    // Errors from user actions (refresh/backup) stay visible until the next action;
+    // the periodic fetchData() only clears its own errors.
+    var actionErrorShown = false;
+
     function showError(msg) {
+      actionErrorShown = false;
       $('#loading').hide();
       $('#error-text').text(msg);
       $('#error').show();
       $('#connection-status').removeClass('label-success').addClass('label-danger').text('Disconnected');
+    }
+
+    function showActionError(msg) {
+      actionErrorShown = true;
+      $('#error-text').text(msg);
+      $('#error').show();
+    }
+
+    function clearActionError() {
+      if (actionErrorShown) {
+        actionErrorShown = false;
+        $('#error').hide();
+      }
     }
 
     // ============================================================
@@ -627,9 +647,10 @@
       $('#btn-refresh').click(function() {
         var $btn = $(this);
         $btn.prop('disabled', true).text('Refreshing...');
+        clearActionError();
         triggerRefresh(function(err) {
           if (err) {
-            showError('Failed to refresh: ' + err);
+            showActionError('Failed to refresh: ' + err);
           }
           fetchData();
           $btn.prop('disabled', false).text('Refresh Data');
@@ -639,9 +660,10 @@
       $('#btn-backup').click(function() {
         var $btn = $(this);
         $btn.prop('disabled', true).text('Downloading...');
+        clearActionError();
         downloadBackup(function(err) {
           if (err) {
-            showError('Failed to download backup: ' + err);
+            showActionError('Failed to download backup: ' + err);
           }
           $btn.prop('disabled', false).text('Download Backup');
         });
