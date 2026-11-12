@@ -157,6 +157,29 @@ class TestCollectDataHardening:
         await load_devices_from_db()
         assert set(data_store.devices) == {"keep"}
 
+    async def test_failing_device_does_not_starve_healthy_ones(self, reset_data_store, mock_switchbot_credentials):
+        devices = [MeterDevice(device_id=d, device_name=d, device_type="Meter") for d in ["broken", "healthy"]]
+        collected = []
+
+        async def status(device_id):
+            if device_id == "broken":
+                main_module.register_api_failure()
+                raise HTTPException(status_code=500, detail="boom")
+            if time.time() < data_store.backoff_until:
+                raise HTTPException(status_code=429, detail="backing off")
+            collected.append(device_id)
+            return {"temperature": 20.0, "humidity": 50}
+
+        with patch("app.main.fetch_devices", new_callable=AsyncMock, return_value=devices), \
+             patch("app.main.fetch_device_status", side_effect=status):
+            await collect_data()
+            assert collected == []
+            data_store.backoff_until = 0
+            await collect_data()
+
+        assert collected == ["healthy"]
+        assert data_store.device_failures == {"broken": 2}
+
     async def test_device_list_is_cached_between_cycles(self, reset_data_store, mock_switchbot_credentials):
         with patch("app.main.fetch_devices", new_callable=AsyncMock) as mock_fetch, \
              patch("app.main.fetch_device_status", new_callable=AsyncMock) as mock_status:

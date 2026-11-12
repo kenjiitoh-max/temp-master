@@ -103,6 +103,7 @@ class DataStore:
         self.last_device_sync: float = 0
         self.backoff_until: float = 0
         self.consecutive_errors: int = 0
+        self.device_failures: dict[str, int] = {}
         self.is_collecting: bool = False
         self.collection_task: Optional[asyncio.Task] = None
         self.cleanup_task: Optional[asyncio.Task] = None
@@ -643,7 +644,10 @@ async def collect_data(force_device_refresh: bool = False):
         logger.exception("Unexpected error while fetching SwitchBot device list")
         return
 
-    for device_id in list(data_store.devices.keys()):
+    # Devices that failed recently go last, so a broken device that triggers the global
+    # backoff does not keep the healthy ones from being collected.
+    device_ids = sorted(data_store.devices, key=lambda d: data_store.device_failures.get(d, 0))
+    for device_id in device_ids:
         try:
             status = await fetch_device_status(device_id)
             
@@ -668,13 +672,16 @@ async def collect_data(force_device_refresh: bool = False):
                 battery=battery,
             )
             await save_device_with_readings(device, [reading])
+            data_store.device_failures.pop(device_id, None)
                     
         except HTTPException as e:
             logger.warning("Failed to fetch status for %s (%s): %s", device_id, e.status_code, e.detail)
             if e.status_code == 429:
                 break
+            data_store.device_failures[device_id] = data_store.device_failures.get(device_id, 0) + 1
         except Exception:
             logger.exception("Unexpected error while collecting data for %s", device_id)
+            data_store.device_failures[device_id] = data_store.device_failures.get(device_id, 0) + 1
 
 
 async def background_collector():
