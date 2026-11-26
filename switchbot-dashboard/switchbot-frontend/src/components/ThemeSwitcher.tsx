@@ -7,6 +7,7 @@ export function ThemeSwitcher() {
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
     const current = THEMES.findIndex((t) => t.id === theme);
     let next: number;
     switch (e.key) {
