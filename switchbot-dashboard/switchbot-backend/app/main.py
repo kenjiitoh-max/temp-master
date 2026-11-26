@@ -790,9 +790,10 @@ async def backup_database():
 
 
 # Serve frontend static files if the static directory exists.
-# Layout under static/:
+# app/static/ is the Vite build output of switchbot-frontend (npm run build):
 #   index.html              -> frontend served at "/"
-STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+#   assets/                 -> hashed JS/CSS bundles
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 if STATIC_DIR.is_dir():
     @app.get("/{full_path:path}")
     async def serve_spa(request: Request, full_path: str):

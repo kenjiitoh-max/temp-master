@@ -5,7 +5,8 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
 ## Features
 
 - Temperature charts for all SwitchBot Meter devices using Recharts
-- Time scale switching (hour/day/month/year)
+- Time scale switching (hour/day/week/month/year)
+- Theme switching (Light / Dark / Sepia), saved in the browser
 - Auto-refresh every 30 seconds (frontend) with background data collection every 2 minutes (backend)
 - Rate limiting protection with exponential backoff
 - All API calls are cached - GET endpoints never call SwitchBot API directly
@@ -41,27 +42,26 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
 
 ### Frontend
 
-1. Navigate to the frontend directory:
+The frontend is a Vite + React + TypeScript app (Tailwind CSS, TanStack Query, Recharts)
+with switchable themes (Light / Dark / Sepia).
+
+1. Navigate to the frontend directory and install dependencies:
    ```bash
    cd switchbot-frontend
-   ```
-
-2. Install dependencies:
-   ```bash
    npm install
    ```
 
-3. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-
-4. Start the development server:
+2. Development: start the Vite dev server (`/api` is proxied to the backend at http://localhost:8000):
    ```bash
    npm run dev
    ```
+   Open http://localhost:5173 in your browser.
 
-5. Open http://localhost:5173 in your browser
+3. Production build: outputs to `../switchbot-backend/app/static`, which FastAPI serves at `/`:
+   ```bash
+   npm run build
+   ```
+   Restart the backend after the first build (the static directory is detected at startup).
 
 ## API Endpoints
 

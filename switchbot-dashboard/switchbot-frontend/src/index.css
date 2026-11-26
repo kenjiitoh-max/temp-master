@@ -1,0 +1,122 @@
+@import 'tailwindcss';
+
+/* テーマごとの色は CSS カスタムプロパティで定義し、<html data-theme="..."> で切り替える */
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f5f5f5;
+  --surface: #ffffff;
+  --surface-muted: #f8f8f8;
+  --border: #dddddd;
+  --text: #333333;
+  --text-muted: #777777;
+  --primary: #337ab7;
+  --primary-hover: #286090;
+  --on-primary: #ffffff;
+  --success: #5cb85c;
+  --danger: #d9534f;
+  --info: #31a5c9;
+  --on-badge: #ffffff;
+  --info-bg: #d9edf7;
+  --info-text: #31708f;
+  --info-border: #bce8f1;
+  --warning-bg: #fcf8e3;
+  --warning-text: #8a6d3b;
+  --warning-border: #faebcc;
+  --danger-bg: #f2dede;
+  --danger-text: #a94442;
+  --danger-border: #ebccd1;
+  --chart-line: #d9534f;
+  --chart-grid: rgba(0, 0, 0, 0.08);
+  --chart-text: #777777;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #12161c;
+  --surface: #1c222b;
+  --surface-muted: #232a35;
+  --border: #343d4b;
+  --text: #e6e9ee;
+  --text-muted: #9aa4b2;
+  --primary: #4c9be8;
+  --primary-hover: #6eb0ef;
+  --on-primary: #0b1220;
+  --success: #3fa66a;
+  --danger: #e0625e;
+  --info: #3d9fc0;
+  --on-badge: #ffffff;
+  --info-bg: #16303d;
+  --info-text: #9ed4ea;
+  --info-border: #23485a;
+  --warning-bg: #3a3118;
+  --warning-text: #ecd28b;
+  --warning-border: #5a4b22;
+  --danger-bg: #3d1f1f;
+  --danger-text: #f0a9a6;
+  --danger-border: #5e2e2d;
+  --chart-line: #ff7b72;
+  --chart-grid: rgba(255, 255, 255, 0.1);
+  --chart-text: #9aa4b2;
+}
+
+[data-theme='sepia'] {
+  color-scheme: light;
+  --bg: #f1e7d0;
+  --surface: #fbf4e2;
+  --surface-muted: #f3e9d0;
+  --border: #d8c7a3;
+  --text: #4a3b28;
+  --text-muted: #86735a;
+  --primary: #8a5a2b;
+  --primary-hover: #6f4720;
+  --on-primary: #fff8e8;
+  --success: #6b8e4e;
+  --danger: #b5533c;
+  --info: #5f8a8b;
+  --on-badge: #fff8e8;
+  --info-bg: #e6e3c8;
+  --info-text: #4f5f45;
+  --info-border: #cfcba6;
+  --warning-bg: #f6e3b0;
+  --warning-text: #7a5a1c;
+  --warning-border: #e2c886;
+  --danger-bg: #efd3c4;
+  --danger-text: #8c3a26;
+  --danger-border: #dcb3a0;
+  --chart-line: #b5533c;
+  --chart-grid: rgba(74, 59, 40, 0.14);
+  --chart-text: #86735a;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+  --color-on-badge: var(--on-badge);
+  --color-info-bg: var(--info-bg);
+  --color-info-text: var(--info-text);
+  --color-info-border: var(--info-border);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-text: var(--warning-text);
+  --color-warning-border: var(--warning-border);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-text: var(--danger-text);
+  --color-danger-border: var(--danger-border);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'Helvetica Neue', Helvetica, Arial, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  font-size: 14px;
+}
