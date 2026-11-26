@@ -5,7 +5,8 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
 ## Features
 
 - Temperature charts for all SwitchBot Meter devices using Recharts
-- Time scale switching (hour/day/month/year)
+- Time scale switching (hour/day/week/month/year)
+- Theme switching (Light / Dark / Midnight / High Contrast)
 - Auto-refresh every 30 seconds (frontend) with background data collection every 2 minutes (backend)
 - Rate limiting protection with exponential backoff
 - All API calls are cached - GET endpoints never call SwitchBot API directly
@@ -41,6 +42,8 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
 
 ### Frontend
 
+Vite + React 18 + TypeScript SPA (TanStack Query, Recharts, Tailwind CSS). Requires Node.js 20+.
+
 1. Navigate to the frontend directory:
    ```bash
    cd switchbot-frontend
@@ -51,17 +54,28 @@ A fullstack web dashboard to monitor temperature readings from SwitchBot Meter d
    npm install
    ```
 
-3. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-
-4. Start the development server:
+3. Start the development server (proxies `/api` to the backend at `http://localhost:8000`; override with `VITE_BACKEND_URL`):
    ```bash
    npm run dev
    ```
 
-5. Open http://localhost:5173 in your browser
+4. Open http://localhost:5173 in your browser
+
+5. Build for production (outputs to `switchbot-frontend/dist/`):
+   ```bash
+   npm run build
+   ```
+
+   To serve the build from FastAPI locally, link it as the backend's static directory, then (re)start the backend:
+   ```bash
+   ln -sfn ../switchbot-frontend/dist switchbot-backend/static
+   ```
+
+   The Dockerfile builds the frontend in a `node:20-alpine` stage and copies `dist/` into the backend image's `static/`.
+
+### Themes
+
+Use the theme switcher in the navbar to choose Light / Dark / Midnight / High Contrast. The choice is saved in `localStorage`; on first visit the OS `prefers-color-scheme` setting is used.
 
 ## API Endpoints
 
