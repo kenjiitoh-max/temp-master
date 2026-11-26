@@ -20,5 +20,5 @@ export const DISPLAY_NAMES: Record<string, string> = {
 };
 
 export function getDisplayName(deviceName: string): string {
-  return DISPLAY_NAMES[deviceName] ?? deviceName;
+  return Object.prototype.hasOwnProperty.call(DISPLAY_NAMES, deviceName) ? DISPLAY_NAMES[deviceName] : deviceName;
 }
