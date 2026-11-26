@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { getDisplayName } from '../config/displayNames';
 import type { HistoryResponse, Meter, TimeScale } from '../lib/api';
@@ -23,6 +24,11 @@ function Stat({ value, unit, label, color }: { value: number | null; unit: strin
 }
 
 export function MeterCard({ meter, timeScale, history }: Props) {
+  // Keep showing the last loaded chart while a new time range is fetched, instead of blanking it.
+  const lastLoaded = useRef<{ data: HistoryResponse; timeScale: TimeScale } | null>(null);
+  if (history.data) lastLoaded.current = { data: history.data, timeScale };
+  const shown = lastLoaded.current;
+
   return (
     <article
       data-testid="meter-card"
@@ -42,12 +48,12 @@ export function MeterCard({ meter, timeScale, history }: Props) {
       </div>
 
       <div className="relative h-[200px]" data-testid="meter-chart">
-        {history.isPending ? (
-          <div className="flex h-full items-center justify-center text-sm text-muted">Loading chart...</div>
-        ) : history.isError && !history.data ? (
+        {shown ? (
+          <TemperatureChart history={shown.data.history} timeScale={shown.timeScale} />
+        ) : history.isError ? (
           <div className="flex h-full items-center justify-center text-sm text-danger">Failed to load history</div>
         ) : (
-          <TemperatureChart history={history.data?.history ?? []} timeScale={timeScale} />
+          <div className="flex h-full items-center justify-center text-sm text-muted">Loading chart...</div>
         )}
       </div>
 

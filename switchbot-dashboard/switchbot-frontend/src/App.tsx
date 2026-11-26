@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { keepPreviousData, useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
 import { api, type TimeScale } from './lib/api';
 import { ThemeProvider } from './theme/ThemeProvider';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
@@ -31,7 +31,6 @@ function Dashboard() {
       queryKey: ['history', m.device_id, timeScale],
       queryFn: () => api.getHistory(m.device_id, timeScale),
       refetchInterval: REFRESH_INTERVAL,
-      placeholderData: keepPreviousData,
     })),
   });
 
