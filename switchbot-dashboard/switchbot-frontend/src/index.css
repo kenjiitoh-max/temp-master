@@ -1,0 +1,106 @@
+@import 'tailwindcss';
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-card: var(--card-bg);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-temp: var(--temp);
+  --color-humidity: var(--humidity);
+  --color-battery: var(--battery);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+}
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f4f6fb;
+  --fg: #1e293b;
+  --muted: #64748b;
+  --card-bg: #ffffff;
+  --border: #e2e8f0;
+  --accent: #2563eb;
+  --accent-fg: #ffffff;
+  --temp: #dc2626;
+  --humidity: #0284c7;
+  --battery: #16a34a;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --chart-line: #dc2626;
+  --chart-grid: rgba(15, 23, 42, 0.08);
+  --chart-axis: #64748b;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0f172a;
+  --fg: #e2e8f0;
+  --muted: #94a3b8;
+  --card-bg: #1e293b;
+  --border: #334155;
+  --accent: #60a5fa;
+  --accent-fg: #0f172a;
+  --temp: #f87171;
+  --humidity: #38bdf8;
+  --battery: #4ade80;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --chart-line: #f87171;
+  --chart-grid: rgba(226, 232, 240, 0.08);
+  --chart-axis: #94a3b8;
+}
+
+[data-theme='midnight'] {
+  color-scheme: dark;
+  --bg: #0b0620;
+  --fg: #ede9fe;
+  --muted: #a78bfa;
+  --card-bg: #1a1035;
+  --border: #3b2a6b;
+  --accent: #c084fc;
+  --accent-fg: #0b0620;
+  --temp: #f472b6;
+  --humidity: #22d3ee;
+  --battery: #a3e635;
+  --success: #a3e635;
+  --warning: #facc15;
+  --danger: #fb7185;
+  --chart-line: #22d3ee;
+  --chart-grid: rgba(192, 132, 252, 0.12);
+  --chart-axis: #a78bfa;
+}
+
+[data-theme='contrast'] {
+  color-scheme: dark;
+  --bg: #000000;
+  --fg: #ffffff;
+  --muted: #ffffff;
+  --card-bg: #000000;
+  --border: #ffffff;
+  --accent: #ffff00;
+  --accent-fg: #000000;
+  --temp: #ff5555;
+  --humidity: #00ffff;
+  --battery: #00ff00;
+  --success: #00ff00;
+  --warning: #ffff00;
+  --danger: #ff5555;
+  --chart-line: #ffff00;
+  --chart-grid: rgba(255, 255, 255, 0.35);
+  --chart-axis: #ffffff;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
